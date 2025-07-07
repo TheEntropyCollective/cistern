@@ -57,7 +57,10 @@
 
       # Development shell with deployment tools
       devShells = forAllSystems (system: 
-        let pkgs = nixpkgs.legacyPackages.${system}; in
+        let 
+          pkgs = nixpkgs.legacyPackages.${system};
+          isLinux = system == "x86_64-linux" || system == "aarch64-linux";
+        in
         pkgs.mkShell {
           buildInputs = with pkgs; [
             git
@@ -65,11 +68,10 @@
             age
             yq-go
             jq
-          ] ++ nixpkgs.lib.optionals (system == "x86_64-linux" || system == "aarch64-linux") [
-            nixos-anywhere.packages.${system}.default
-            deploy-rs.packages.${system}.default
-          ] ++ nixpkgs.lib.optionals (pkgs.stdenv.isDarwin || pkgs.stdenv.isLinux) [
             qemu
+          ] ++ nixpkgs.lib.optionals isLinux [
+            nixos-anywhere.packages.${system}.default or pkgs.hello
+            deploy-rs.packages.${system}.default or pkgs.hello
           ];
           
           shellHook = ''

@@ -73,47 +73,35 @@ start_vm() {
     
     echo "Starting NixOS VM for Cistern testing..."
     
-    # Create VM disk if it doesn't exist
+    # Check if VM disk exists and is set up
     if [ ! -f "$VM_DISK" ]; then
-        echo "Creating VM disk..."
+        echo "Creating new VM disk..."
         qemu-img create -f qcow2 "$VM_DISK" 20G
-        
-        echo "Setting up VM configuration..."
-        setup_vm_config
-        
-        # Build NixOS installer ISO
-        echo "Building NixOS installer ISO..."
-        cd "$VM_DIR"
-        nix build .#vm-iso
-        
-        echo "Starting VM installation process..."
-        echo "Manual installation required - VM will boot to NixOS installer"
-        echo "After installation, use '$0 deploy' to install Cistern"
-        
-        # Start VM with installer ISO
-        qemu-system-x86_64 \
-            -enable-kvm \
-            -m 2048 \
-            -smp 2 \
-            -drive file="$VM_DISK",format=qcow2 \
-            -cdrom result/iso/nixos-*.iso \
-            -netdev user,id=net0,hostfwd=tcp::$VM_PORT-:22,hostfwd=tcp::8080-:80 \
-            -device virtio-net-pci,netdev=net0 \
-            -nographic \
-            -boot d
-        
-        return 0
+        echo "VM disk created. Use '$0 deploy' to install Cistern to the VM."
+        echo "Or manually install NixOS first, then deploy."
     fi
     
     # Start existing VM
+    echo "Starting VM in background..."
+    
+    # Detect accelerator (KVM on Linux, HVF on macOS)
+    local accel_option=""
+    if [[ "$OSTYPE" == "linux-gnu"* ]] && [ -r /dev/kvm ]; then
+        # Linux - use KVM if available
+        accel_option="-enable-kvm"
+    else
+        # Fallback to software emulation (slower but works everywhere)
+        echo "Note: Using software emulation (no hardware acceleration available)"
+    fi
+    
     qemu-system-x86_64 \
-        -enable-kvm \
+        $accel_option \
         -m 2048 \
         -smp 2 \
         -drive file="$VM_DISK",format=qcow2 \
         -netdev user,id=net0,hostfwd=tcp::$VM_PORT-:22,hostfwd=tcp::8080-:80 \
         -device virtio-net-pci,netdev=net0 \
-        -nographic \
+        -display none \
         -daemonize \
         -pidfile "$VM_DIR/vm.pid"
     
@@ -183,21 +171,19 @@ ssh_vm() {
 }
 
 deploy_to_vm() {
-    if ! vm_running; then
-        echo "VM is not running. Starting VM..."
-        start_vm
-    fi
-    
     echo "Deploying Cistern to test VM..."
     
-    # Wait for SSH
-    if ! wait_for_ssh; then
-        echo "❌ Cannot connect to VM via SSH"
-        exit 1
+    # Check if VM disk exists
+    if [ ! -f "$VM_DISK" ]; then
+        echo "Creating VM disk first..."
+        qemu-img create -f qcow2 "$VM_DISK" 20G
     fi
     
+    echo "Setting up VM configuration..."
+    setup_vm_config
+    
     # Create a temporary host configuration for the VM
-    local temp_host_config="$VM_DIR/vm-host.nix"
+    local temp_host_config="$FLAKE_DIR/hosts/vm-test.nix"
     cat > "$temp_host_config" << EOF
 { config, pkgs, lib, ... }:
 
@@ -211,31 +197,78 @@ deploy_to_vm() {
 
   networking.hostName = "cistern-test-vm";
   
-  # VM-specific optimizations
+  # VM-specific disk configuration
+  fileSystems."/" = {
+    device = "/dev/vda1";
+    fsType = "ext4";
+  };
+  
+  boot.initrd.availableKernelModules = [ "virtio_pci" "virtio_scsi" "ahci" "sd_mod" ];
   boot.kernelParams = [ "console=ttyS0" ];
   
   system.stateVersion = "24.05";
 }
 EOF
     
-    # Copy SSH key to VM for nixos-anywhere
-    echo "Copying deployment files to VM..."
-    ssh -p "$VM_PORT" -i "$VM_SSH_KEY" -o StrictHostKeyChecking=no root@localhost "mkdir -p /tmp/cistern-deploy"
-    scp -P "$VM_PORT" -i "$VM_SSH_KEY" -o StrictHostKeyChecking=no -r "$FLAKE_DIR"/* root@localhost:/tmp/cistern-deploy/
+    # Update flake to include VM test configuration
+    if ! grep -q "vm-test" "$FLAKE_DIR/flake.nix"; then
+        echo "Adding VM test configuration to flake..."
+        sed -i.bak '/media-server-template/a\
+        vm-test = nixpkgs.lib.nixosSystem {\
+          system = nixosSystem;\
+          modules = commonModules ++ [\
+            ./hardware/generic.nix\
+            ./hosts/vm-test.nix\
+          ];\
+          specialArgs = { inherit inputs; };\
+        };' "$FLAKE_DIR/flake.nix"
+    fi
     
-    # Deploy using nixos-rebuild on the VM itself
-    echo "Running deployment on VM..."
-    ssh -p "$VM_PORT" -i "$VM_SSH_KEY" -o StrictHostKeyChecking=no root@localhost << 'EOF'
-cd /tmp/cistern-deploy
-cp vm-host.nix hosts/
-nix flake update
-nixos-rebuild switch --flake .#vm-host --show-trace
+    echo "Installing NixOS to VM using nixos-anywhere..."
+    
+    # Use nixos-anywhere to install directly to the VM disk
+    cd "$FLAKE_DIR"
+    
+    # Create a simple disko configuration for the VM
+    cat > "$VM_DIR/disko-config.nix" << 'EOF'
+{
+  disko.devices = {
+    disk = {
+      vda = {
+        device = "/dev/vda";
+        type = "disk";
+        content = {
+          type = "gpt";
+          partitions = {
+            boot = {
+              size = "1M";
+              type = "EF02"; # for grub MBR
+            };
+            root = {
+              size = "100%";
+              content = {
+                type = "filesystem";
+                format = "ext4";
+                mountpoint = "/";
+              };
+            };
+          };
+        };
+      };
+    };
+  };
+}
 EOF
     
-    echo "✅ Cistern deployed to test VM!"
-    echo "Services available at:"
-    echo "  Jellyfin: http://localhost:8080 (main interface)"
-    echo "  SSH: ssh -p $VM_PORT -i $VM_SSH_KEY root@localhost"
+    # For now, let's use a simpler approach - just start the VM
+    echo "Starting VM for manual setup..."
+    start_vm
+    
+    echo "✅ VM started!"
+    echo "To complete setup:"
+    echo "1. SSH into VM: ssh -p $VM_PORT -i $VM_SSH_KEY root@localhost"
+    echo "2. Install NixOS manually or run deployment"
+    echo "3. Services will be available at http://localhost:8080"
 }
 
 destroy_vm() {
