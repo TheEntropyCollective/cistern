@@ -1,0 +1,72 @@
+# Cistern Media Server Fleet Inventory
+# This file tracks all servers in your media server fleet
+
+servers:
+  # Template for adding new servers
+  # media-server-01:
+  #   hostname: "192.168.1.100"
+  #   mac_address: "aa:bb:cc:dd:ee:ff"
+  #   hardware_type: "generic"  # generic, raspberry-pi
+  #   role: "primary"           # primary, secondary, storage
+  #   location: "living-room"
+  #   storage:
+  #     - device: "/dev/sda1"
+  #       mount: "/mnt/media/movies"
+  #       size: "2TB"
+  #     - device: "/dev/sdb1"
+  #       mount: "/mnt/media/tv"
+  #       size: "4TB"
+  #   services:
+  #     - jellyfin
+  #     - sonarr
+  #     - radarr
+  #     - transmission
+  #   notes: "Main media server with 4K transcoding"
+  #   deployed: "2024-01-15"
+  #   last_updated: "2024-01-20"
+
+# Network configuration
+network:
+  subnet: "192.168.1.0/24"
+  gateway: "192.168.1.1"
+  dns:
+    - "1.1.1.1"
+    - "8.8.8.8"
+  dhcp_range:
+    start: "192.168.1.100"
+    end: "192.168.1.199"
+
+# Service distribution strategy
+services:
+  jellyfin:
+    primary: "media-server-01"
+    replicas: []
+  
+  sonarr:
+    primary: "media-server-01"
+    replicas: []
+  
+  radarr:
+    primary: "media-server-01" 
+    replicas: []
+  
+  prowlarr:
+    primary: "media-server-01"
+    replicas: []
+  
+  transmission:
+    primary: "media-server-01"
+    replicas: []
+
+# Storage strategy
+storage:
+  media_root: "/mnt/media"
+  backup_locations: []
+  replication: false
+
+# Monitoring endpoints
+monitoring:
+  prometheus_port: 9090
+  grafana_port: 3000
+  loki_port: 3100
+  alertmanager_port: 9093
