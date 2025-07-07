@@ -18,8 +18,9 @@
 
   outputs = { self, nixpkgs, nixpkgs-unstable, deploy-rs, nixos-anywhere, ... }@inputs:
     let
-      system = "x86_64-linux";
-      pkgs = nixpkgs.legacyPackages.${system};
+      supportedSystems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
+      forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
+      nixosSystem = "x86_64-linux";
       
       # Common modules shared across all servers
       commonModules = [
@@ -33,7 +34,7 @@
       nixosConfigurations = {
         # Template configuration for new media servers
         media-server-template = nixpkgs.lib.nixosSystem {
-          inherit system;
+          system = nixosSystem;
           modules = commonModules ++ [
             ./hardware/generic.nix
             ./hosts/template.nix
@@ -55,56 +56,67 @@
       };
 
       # Development shell with deployment tools
-      devShells.${system}.default = pkgs.mkShell {
-        buildInputs = with pkgs; [
-          nixos-anywhere.packages.${system}.default
-          deploy-rs.packages.${system}.default
-          git
-          ssh-to-age
-          age
-        ];
-        
-        shellHook = ''
-          echo "Cistern Media Server Fleet Management"
-          echo "Available commands:"
-          echo "  nixos-anywhere - Install NixOS on remote machines"
-          echo "  deploy - Deploy configurations to existing fleet"
-          echo ""
-        '';
-      };
+      devShells = forAllSystems (system: 
+        let pkgs = nixpkgs.legacyPackages.${system}; in
+        pkgs.mkShell {
+          buildInputs = with pkgs; [
+            git
+            ssh-to-age
+            age
+            yq-go
+            jq
+          ] ++ nixpkgs.lib.optionals (system == "x86_64-linux" || system == "aarch64-linux") [
+            nixos-anywhere.packages.${system}.default
+            deploy-rs.packages.${system}.default
+          ] ++ nixpkgs.lib.optionals (pkgs.stdenv.isDarwin || pkgs.stdenv.isLinux) [
+            qemu
+          ];
+          
+          shellHook = ''
+            echo "Cistern Media Server Fleet Management"
+            echo "Available commands:"
+            echo "  nixos-anywhere - Install NixOS on remote machines"
+            echo "  deploy - Deploy configurations to existing fleet"
+            echo "  qemu-system-x86_64 - QEMU for VM testing"
+            echo ""
+          '';
+        });
 
       # Utility scripts
-      packages.${system} = {
-        provision-server = pkgs.writeShellScriptBin "provision-server" ''
-          #!/usr/bin/env bash
-          set -euo pipefail
+      packages = forAllSystems (system: 
+        let pkgs = nixpkgs.legacyPackages.${system}; in {
+          provision-server = pkgs.writeShellScriptBin "provision-server" ''
+            #!/usr/bin/env bash
+            set -euo pipefail
+            
+            if [ $# -ne 2 ]; then
+              echo "Usage: provision-server <hostname/ip> <hardware-config>"
+              echo "Example: provision-server 192.168.1.100 generic"
+              exit 1
+            fi
+            
+            HOST=$1
+            HARDWARE=$2
+            
+            echo "Provisioning new media server at $HOST with $HARDWARE hardware config..."
+            
+            nixos-anywhere --flake .#media-server-template \
+              --build-on-remote \
+              root@$HOST
+          '';
           
-          if [ $# -ne 2 ]; then
-            echo "Usage: provision-server <hostname/ip> <hardware-config>"
-            echo "Example: provision-server 192.168.1.100 generic"
-            exit 1
-          fi
-          
-          HOST=$1
-          HARDWARE=$2
-          
-          echo "Provisioning new media server at $HOST with $HARDWARE hardware config..."
-          
-          nixos-anywhere --flake .#media-server-template \
-            --build-on-remote \
-            root@$HOST
-        '';
-        
-        deploy-fleet = pkgs.writeShellScriptBin "deploy-fleet" ''
-          #!/usr/bin/env bash
-          set -euo pipefail
-          
-          echo "Deploying to entire media server fleet..."
-          deploy .#
-        '';
-      };
+          deploy-fleet = pkgs.writeShellScriptBin "deploy-fleet" ''
+            #!/usr/bin/env bash
+            set -euo pipefail
+            
+            echo "Deploying to entire media server fleet..."
+            deploy .#
+          '';
+        });
 
       # Checks for CI/CD
-      checks.${system} = deploy-rs.lib.${system}.deployChecks self.deploy;
+      checks = forAllSystems (system: 
+        nixpkgs.lib.optionalAttrs (system == "x86_64-linux" || system == "aarch64-linux") 
+          (deploy-rs.lib.${system}.deployChecks self.deploy));
     };
 }
