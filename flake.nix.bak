@@ -41,16 +41,6 @@
           ];
           specialArgs = { inherit inputs; };
         };
-        
-        # VM test configuration
-        vm-test = nixpkgs.lib.nixosSystem {
-          system = nixosSystem;
-          modules = commonModules ++ [
-            ./hardware/generic.nix
-            ./hosts/vm-test.nix
-          ];
-          specialArgs = { inherit inputs; };
-        };
       };
 
       # Deploy-rs configuration for fleet management
