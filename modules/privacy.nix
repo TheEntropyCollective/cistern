@@ -56,15 +56,14 @@ with lib;
       wireguard.enable = mkIf (config.cistern.privacy.vpn.provider == "wireguard") true;
       
       # Privacy-focused DNS
-      nameservers = mkIf (config.cistern.privacy.dns.provider == "quad9") [
-        "9.9.9.9"      # Quad9 Primary
-        "149.112.112.112"  # Quad9 Secondary
-      ];
-      
-      nameservers = mkIf (config.cistern.privacy.dns.provider == "cloudflare") [
-        "1.1.1.1"      # Cloudflare Primary
-        "1.0.0.1"      # Cloudflare Secondary
-      ];
+      nameservers = 
+        if config.cistern.privacy.dns.provider == "quad9" then [
+          "9.9.9.9"      # Quad9 Primary
+          "149.112.112.112"  # Quad9 Secondary
+        ] else if config.cistern.privacy.dns.provider == "cloudflare" then [
+          "1.1.1.1"      # Cloudflare Primary
+          "1.0.0.1"      # Cloudflare Secondary
+        ] else [];
       
       # Firewall rules for VPN-only traffic
       firewall = {
@@ -279,65 +278,8 @@ with lib;
     # fail2ban for brute force protection
     services.fail2ban = {
       enable = true;
-      maxretry = 5;
-      findtime = 600;  # 10 minutes
-      bantime = 3600;  # 1 hour
-      
-      jails = {
-        nginx-auth = {
-          enabled = true;
-          filter = "nginx-auth";
-          logpath = "/var/log/nginx/access.log";
-          maxretry = 3;
-          findtime = 300;  # 5 minutes
-          bantime = 1800;  # 30 minutes
-        };
-        
-        nginx-noscript = {
-          enabled = true;
-          filter = "nginx-noscript";
-          logpath = "/var/log/nginx/access.log";
-          maxretry = 6;
-          bantime = 600;  # 10 minutes
-        };
-        
-        nginx-badbots = {
-          enabled = true;
-          filter = "nginx-badbots";
-          logpath = "/var/log/nginx/access.log";
-          maxretry = 2;
-          bantime = 86400;  # 24 hours
-        };
-        
-        sshd = {
-          enabled = true;
-          filter = "sshd";
-          logpath = "/var/log/auth.log";
-          maxretry = 3;
-          findtime = 600;  # 10 minutes
-          bantime = 3600;  # 1 hour
-        };
-      };
+      # Use default configuration with basic SSH protection
     };
-    
-    # Custom fail2ban filters
-    environment.etc."fail2ban/filter.d/nginx-auth.conf".text = ''
-      [Definition]
-      failregex = ^<HOST> -.*"(GET|POST).*(400|401|403|404|444)" .*$
-      ignoreregex =
-    '';
-    
-    environment.etc."fail2ban/filter.d/nginx-noscript.conf".text = ''
-      [Definition]
-      failregex = ^<HOST> -.*GET.*(\.php|\.asp|\.exe|\.pl|\.cgi|\.scgi)
-      ignoreregex =
-    '';
-    
-    environment.etc."fail2ban/filter.d/nginx-badbots.conf".text = ''
-      [Definition]
-      failregex = ^<HOST> -.*"(GET|POST|HEAD).*HTTP.*" (?:400|401|403|404|405|408|414|444|499|500|502|503|504) .*"(?:python-requests|curl|wget|Go-http-client|masscan|nmap|nikto|sqlmap|gobuster|dirbuster|hydra|medusa|nessus|openvas|skipfish|w3af|wapiti|whatweb|WPScan|joomscan|droopescan|CMSmap|BlindElephant|Nikto|dirb|DirBuster|Uniscan|LFI|XSS|SQLi|RFI|backdoor|shell|eval|exec|system|passthru|include|require|file_get_contents|curl_exec|popen|proc_open|shell_exec|base64_decode|str_rot13|urldecode|rawurldecode|hex2bin|bin2hex|chr|ord|preg_replace|create_function|call_user_func|array_filter|array_map|array_reduce|array_walk|usort|uasort|uksort|call_user_func_array|forward_static_call|forward_static_call_array|Reflection|ReflectionClass|ReflectionFunction|ReflectionMethod|ReflectionObject|ReflectionProperty|ReflectionParameter|ReflectionExtension).*"
-      ignoreregex =
-    '';
 
     # Install privacy tools
     environment.systemPackages = with pkgs; [
@@ -468,6 +410,5 @@ with lib;
         };
       };
     };
-  };
   };
 }

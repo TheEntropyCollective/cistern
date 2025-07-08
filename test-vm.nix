@@ -12,6 +12,12 @@
   # VM-specific settings
   networking.hostName = "cistern-test";
   
+  # Basic filesystem configuration for VM
+  fileSystems."/" = {
+    device = "/dev/disk/by-label/nixos";
+    fsType = "ext4";
+  };
+  
   # Enable VM testing
   virtualisation = {
     vmVariant = {

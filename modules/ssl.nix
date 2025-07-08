@@ -177,7 +177,6 @@ EOF
       
       virtualHosts."${config.cistern.ssl.domain}" = {
         # HTTP to HTTPS redirect
-        addSSL = true;
         forceSSL = true;
         
         # Certificate configuration

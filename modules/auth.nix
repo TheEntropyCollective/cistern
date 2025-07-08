@@ -107,7 +107,6 @@ with lib;
         # Main media server interface with authentication
         "${config.networking.hostName}.local" = {
           # SSL configuration will be handled by ssl.nix if enabled
-          forceSSL = lib.mkDefault false;
           locations = {
             # Authentication endpoint
             "/auth/login" = {
