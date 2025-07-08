@@ -274,16 +274,8 @@ with lib;
       };
     };
 
-    # Configure individual services to require authentication
-    services.sonarr.settings = {
-      AuthenticationMethod = "External";
-      AuthenticationRequired = "DisabledForLocalAddresses";
-    };
-    
-    services.radarr.settings = {
-      AuthenticationMethod = "External";  
-      AuthenticationRequired = "DisabledForLocalAddresses";
-    };
+    # Note: Sonarr and Radarr authentication is handled via nginx proxy
+    # The services themselves don't have built-in NixOS authentication options
 
     # Enhanced security logging
     systemd.services.auth-monitor = {
