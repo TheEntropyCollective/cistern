@@ -8,7 +8,7 @@
   systemd.tmpfiles.rules = [
     "d /var/lib/media/auto-config 0755 media media -"
     
-    # Create media directory structure
+    # Create media directory structure (local fallback)
     "d /mnt/media 0755 media media -"
     "d /mnt/media/movies 0755 media media -"
     "d /mnt/media/tv 0755 media media -"
@@ -36,6 +36,21 @@
       LOG_FILE="/var/lib/media/auto-config/setup.log"
       
       echo "$(date): Starting comprehensive auto-configuration" >> "$LOG_FILE"
+      
+      # Determine media storage paths (NoiseFS or local)
+      if mountpoint -q /mnt/media/noisefs 2>/dev/null; then
+        MEDIA_ROOT="/mnt/media/noisefs"
+        echo "$(date): Using NoiseFS distributed storage at $MEDIA_ROOT" >> "$LOG_FILE"
+      else
+        MEDIA_ROOT="/mnt/media"
+        echo "$(date): Using local storage at $MEDIA_ROOT" >> "$LOG_FILE"
+      fi
+      
+      MOVIES_PATH="$MEDIA_ROOT/movies"
+      TV_PATH="$MEDIA_ROOT/tv"
+      DOWNLOADS_PATH="$MEDIA_ROOT/downloads"
+      DOWNLOADS_COMPLETE="$MEDIA_ROOT/downloads/complete"
+      DOWNLOADS_INCOMPLETE="$MEDIA_ROOT/downloads/incomplete"
       
       # Function to wait for service to be ready
       wait_for_service() {
@@ -67,33 +82,33 @@
       wait_for_service "http://127.0.0.1:6767/api/system/status" "Bazarr"
       
       # Configure Jellyfin media libraries
-      echo "$(date): Configuring Jellyfin" >> "$LOG_FILE"
+      echo "$(date): Configuring Jellyfin with paths: Movies=$MOVIES_PATH, TV=$TV_PATH" >> "$LOG_FILE"
       ${pkgs.curl}/bin/curl -s -X POST \
         -H "Content-Type: application/json" \
-        -d '{
-          "Name": "Movies",
-          "CollectionType": "movies",
-          "Locations": ["/mnt/media/movies"],
-          "LibraryOptions": {
-            "EnablePhotos": false,
-            "EnableRealtimeMonitor": true,
-            "EnableChapterImageExtraction": false
+        -d "{
+          \"Name\": \"Movies\",
+          \"CollectionType\": \"movies\",
+          \"Locations\": [\"$MOVIES_PATH\"],
+          \"LibraryOptions\": {
+            \"EnablePhotos\": false,
+            \"EnableRealtimeMonitor\": true,
+            \"EnableChapterImageExtraction\": false
           }
-        }' \
+        }" \
         http://127.0.0.1:8096/Library/VirtualFolders >> "$LOG_FILE" 2>&1 || true
       
       ${pkgs.curl}/bin/curl -s -X POST \
         -H "Content-Type: application/json" \
-        -d '{
-          "Name": "TV Shows",
-          "CollectionType": "tvshows",
-          "Locations": ["/mnt/media/tv"],
-          "LibraryOptions": {
-            "EnablePhotos": false,
-            "EnableRealtimeMonitor": true,
-            "EnableChapterImageExtraction": false
+        -d "{
+          \"Name\": \"TV Shows\",
+          \"CollectionType\": \"tvshows\",
+          \"Locations\": [\"$TV_PATH\"],
+          \"LibraryOptions\": {
+            \"EnablePhotos\": false,
+            \"EnableRealtimeMonitor\": true,
+            \"EnableChapterImageExtraction\": false
           }
-        }' \
+        }" \
         http://127.0.0.1:8096/Library/VirtualFolders >> "$LOG_FILE" 2>&1 || true
       
       # Configure Sonarr
@@ -130,12 +145,12 @@
       # Add root folder for TV shows
       ${pkgs.curl}/bin/curl -s -X POST \
         -H "Content-Type: application/json" \
-        -d '{
-          "path": "/mnt/media/tv",
-          "accessible": true,
-          "freeSpace": 0,
-          "unmappedFolders": []
-        }' \
+        -d "{
+          \"path\": \"$TV_PATH\",
+          \"accessible\": true,
+          \"freeSpace\": 0,
+          \"unmappedFolders\": []
+        }" \
         http://127.0.0.1:8989/api/v3/rootfolder >> "$LOG_FILE" 2>&1 || true
       
       # Configure Radarr
@@ -172,33 +187,33 @@
       # Add root folder for movies
       ${pkgs.curl}/bin/curl -s -X POST \
         -H "Content-Type: application/json" \
-        -d '{
-          "path": "/mnt/media/movies",
-          "accessible": true,
-          "freeSpace": 0,
-          "unmappedFolders": []
-        }' \
+        -d "{
+          \"path\": \"$MOVIES_PATH\",
+          \"accessible\": true,
+          \"freeSpace\": 0,
+          \"unmappedFolders\": []
+        }" \
         http://127.0.0.1:7878/api/v3/rootfolder >> "$LOG_FILE" 2>&1 || true
       
       # Configure SABnzbd with basic settings
-      echo "$(date): Configuring SABnzbd" >> "$LOG_FILE"
-      ${pkgs.curl}/bin/curl -s "http://127.0.0.1:8080/api?mode=set_config&section=misc&keyword=complete_dir&value=/mnt/media/downloads/complete" >> "$LOG_FILE" 2>&1 || true
-      ${pkgs.curl}/bin/curl -s "http://127.0.0.1:8080/api?mode=set_config&section=misc&keyword=download_dir&value=/mnt/media/downloads/incomplete" >> "$LOG_FILE" 2>&1 || true
-      ${pkgs.curl}/bin/curl -s "http://127.0.0.1:8080/api?mode=set_config&section=categories&keyword=sonarr&value=/mnt/media/tv" >> "$LOG_FILE" 2>&1 || true
-      ${pkgs.curl}/bin/curl -s "http://127.0.0.1:8080/api?mode=set_config&section=categories&keyword=radarr&value=/mnt/media/movies" >> "$LOG_FILE" 2>&1 || true
+      echo "$(date): Configuring SABnzbd with downloads=$DOWNLOADS_COMPLETE" >> "$LOG_FILE"
+      ${pkgs.curl}/bin/curl -s "http://127.0.0.1:8080/api?mode=set_config&section=misc&keyword=complete_dir&value=$DOWNLOADS_COMPLETE" >> "$LOG_FILE" 2>&1 || true
+      ${pkgs.curl}/bin/curl -s "http://127.0.0.1:8080/api?mode=set_config&section=misc&keyword=download_dir&value=$DOWNLOADS_INCOMPLETE" >> "$LOG_FILE" 2>&1 || true
+      ${pkgs.curl}/bin/curl -s "http://127.0.0.1:8080/api?mode=set_config&section=categories&keyword=sonarr&value=$TV_PATH" >> "$LOG_FILE" 2>&1 || true
+      ${pkgs.curl}/bin/curl -s "http://127.0.0.1:8080/api?mode=set_config&section=categories&keyword=radarr&value=$MOVIES_PATH" >> "$LOG_FILE" 2>&1 || true
       
       # Configure Transmission with download directories
-      echo "$(date): Configuring Transmission" >> "$LOG_FILE"
+      echo "$(date): Configuring Transmission with downloads=$DOWNLOADS_COMPLETE" >> "$LOG_FILE"
       ${pkgs.curl}/bin/curl -s -X POST \
         -H "Content-Type: application/json" \
-        -d '{
-          "method": "session-set",
-          "arguments": {
-            "download-dir": "/mnt/media/downloads/complete",
-            "incomplete-dir": "/mnt/media/downloads/incomplete",
-            "incomplete-dir-enabled": true
+        -d "{
+          \"method\": \"session-set\",
+          \"arguments\": {
+            \"download-dir\": \"$DOWNLOADS_COMPLETE\",
+            \"incomplete-dir\": \"$DOWNLOADS_INCOMPLETE\",
+            \"incomplete-dir-enabled\": true
           }
-        }' \
+        }" \
         http://127.0.0.1:9091/transmission/rpc >> "$LOG_FILE" 2>&1 || true
       
       # Configure Bazarr

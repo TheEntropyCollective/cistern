@@ -78,6 +78,35 @@
     # };
   };
 
+  # Enable NoiseFS with private IPFS network
+  cistern.noisefs = {
+    enable = true;
+    mountPoint = "/mnt/media/noisefs";
+    
+    # Configure private IPFS network
+    ipfs = {
+      apiPort = 5001;
+      gatewayPort = 8081;
+      swarmPort = 4001;
+      # swarmKey = ""; # Set same key across all fleet members
+    };
+    
+    # NoiseFS configuration
+    noisefs = {
+      webPort = 8082;  # NoiseFS web UI
+      blockSize = 131072;  # 128KB blocks
+    };
+    
+    # Fleet configuration - add your server IPs here
+    fleet = {
+      servers = [
+        # "192.168.1.100"  # media-server-01
+        # "192.168.1.101"  # media-server-02
+        # "192.168.1.102"  # media-server-03
+      ];
+    };
+  };
+
   # Additional packages for this server
   environment.systemPackages = with pkgs; [
     # Add server-specific packages here

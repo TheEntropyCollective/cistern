@@ -20,6 +20,7 @@
     "d /var/lib/media/config 0755 media media -"
     "d /var/lib/media/cache 0755 media media -"
     "d /var/lib/media/scripts 0755 media media -"
+    # Create local media directories (fallback when NoiseFS not enabled)
     "d /mnt/media 0755 media media -"
     "d /mnt/media/movies 0755 media media -"
     "d /mnt/media/tv 0755 media media -"
@@ -139,9 +140,12 @@
     6767  # Bazarr
     9091  # Transmission
     8080  # SABnzbd
-    8081  # Dashboard
+    8081  # Dashboard/IPFS Gateway
+    8082  # NoiseFS Web UI
     80    # Nginx
     443   # Nginx HTTPS
+    4001  # IPFS Swarm (if NoiseFS enabled)
+    5001  # IPFS API (local only)
   ];
 
   # File system optimizations for media storage

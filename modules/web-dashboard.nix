@@ -74,6 +74,12 @@
                       <p>Download client for Usenet</p>
                       <a href="http://''${window.location.hostname}:8080" target="_blank">Open SABnzbd →</a>
                   </div>
+                  
+                  <div class="service">
+                      <h3>&#128230; NoiseFS <span class="status ready">Ready</span></h3>
+                      <p>Distributed storage with privacy protection</p>
+                      <a href="http://''${window.location.hostname}:8082" target="_blank">Open NoiseFS →</a>
+                  </div>
               </div>
               
               <div class="footer">

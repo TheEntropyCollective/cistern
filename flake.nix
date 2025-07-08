@@ -28,6 +28,7 @@
         ./modules/media-server.nix
         ./modules/monitoring.nix
         ./modules/privacy.nix
+        ./modules/noisefs.nix
       ];
     in
     {
