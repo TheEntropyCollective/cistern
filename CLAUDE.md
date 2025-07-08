@@ -126,6 +126,42 @@ All services are accessible through a unified web interface on port 80.
 - **Dual download support**: Both torrent and Usenet downloading with automatic provider selection
 - **User-friendly dashboard**: Simple web interface to access all services
 
+### Service Access Points
+After deployment, access your services at:
+- **Main Dashboard**: `http://your-server/` (shows all services and status)
+- **Jellyfin**: `http://your-server:8096` or `http://your-server/jellyfin`
+- **Sonarr**: `http://your-server:8989` or `http://your-server/sonarr`
+- **Radarr**: `http://your-server:7878` or `http://your-server/radarr`
+- **Prowlarr**: `http://your-server:9696` or `http://your-server/prowlarr`
+- **Bazarr**: `http://your-server:6767` or `http://your-server/bazarr`
+- **Transmission**: `http://your-server:9091` or `http://your-server/transmission`
+- **SABnzbd**: `http://your-server:8080` or `http://your-server/sabnzbd`
+
+### Initial Setup After Deployment
+1. **Access the dashboard** at `http://your-server/` to verify all services are running
+2. **Configure Usenet provider** in SABnzbd (Settings → Servers)
+3. **Add indexers** in Prowlarr (both torrent and Usenet indexers)
+4. **Test integration** by searching for content in Sonarr or Radarr
+
+The system will automatically:
+- Link Sonarr and Radarr to both download clients
+- Sort downloads into appropriate media folders
+- Update Jellyfin libraries when new content arrives
+
+### Usenet Configuration Guide
+SABnzbd comes pre-configured but requires a Usenet provider:
+
+1. **Choose a Usenet Provider**: Popular options include Eweka, Newsgroup Ninja, UsenetServer
+2. **Configure in SABnzbd**:
+   - Go to `http://your-server:8080`
+   - Navigate to Settings → Servers
+   - Add your provider's server details (host, port, username, password)
+   - Set SSL encryption (typically port 563 or 443)
+3. **Verify Integration**:
+   - Check Sonarr → Settings → Download Clients (SABnzbd should be listed)
+   - Check Radarr → Settings → Download Clients (SABnzbd should be listed)
+4. **Add Usenet Indexers** in Prowlarr for automatic search across both torrents and Usenet
+
 ### Manual Configuration Script
 For additional customization, use the configuration script:
 ```bash
