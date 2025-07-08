@@ -105,16 +105,30 @@ nix flake check
 
 ## Media Services
 
-The system deploys a complete media stack:
-- **Jellyfin**: Media server with web interface
-- **Sonarr**: TV show management
-- **Radarr**: Movie management  
-- **Prowlarr**: Indexer management
+The system deploys a complete media stack with **automatic configuration**:
+- **Jellyfin**: Media server with web interface (auto-configured with Movies & TV libraries)
+- **Sonarr**: TV show management (auto-linked to Transmission & Prowlarr)
+- **Radarr**: Movie management (auto-linked to Transmission & Prowlarr)
+- **Prowlarr**: Indexer management (auto-linked to Sonarr & Radarr)
 - **Bazarr**: Subtitle management
-- **Transmission**: Torrent client
+- **Transmission**: Torrent client (auto-configured with proper categories)
 - **Nginx**: Reverse proxy for all services
+- **Dashboard**: Web interface showing all services and status
 
 All services are accessible through a unified web interface on port 80.
+
+### Auto-Configuration Features
+- **Pre-configured media libraries**: Jellyfin automatically configured with Movies and TV Shows libraries
+- **Service interconnection**: Sonarr and Radarr automatically linked to Transmission for downloads
+- **Automatic file sorting**: Downloads automatically sorted into appropriate folders
+- **Root folder setup**: Media folders automatically configured in each service
+- **User-friendly dashboard**: Simple web interface to access all services
+
+### Manual Configuration Script
+For additional customization, use the configuration script:
+```bash
+./scripts/configure-media.sh [hostname]
+```
 
 ## Adding New Servers
 

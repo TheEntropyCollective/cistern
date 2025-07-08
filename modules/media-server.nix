@@ -3,6 +3,13 @@
 {
   # Media server configuration for Cistern fleet
   
+  # Import additional modules for auto-configuration
+  imports = [
+    ./auto-config.nix
+    ./media-scripts.nix
+    ./web-dashboard.nix
+  ];
+  
   # Create media group and directories
   users.groups.media = {};
   
@@ -10,11 +17,14 @@
     "d /var/lib/media 0755 media media -"
     "d /var/lib/media/config 0755 media media -"
     "d /var/lib/media/cache 0755 media media -"
+    "d /var/lib/media/scripts 0755 media media -"
     "d /mnt/media 0755 media media -"
     "d /mnt/media/movies 0755 media media -"
     "d /mnt/media/tv 0755 media media -"
     "d /mnt/media/music 0755 media media -"
     "d /mnt/media/books 0755 media media -"
+    "d /mnt/media/downloads 0755 media media -"
+    "d /mnt/media/downloads/.incomplete 0755 media media -"
   ];
 
   # Jellyfin media server
@@ -53,6 +63,9 @@
       rpc-host-whitelist-enabled = false;
       ratio-limit-enabled = true;
       ratio-limit = 2.0;
+      # Pre-configure categories for automatic sorting
+      script-torrent-done-enabled = true;
+      script-torrent-done-filename = "/var/lib/media/scripts/torrent-done.sh";
     };
   };
 
@@ -138,6 +151,7 @@
     9696  # Prowlarr
     6767  # Bazarr
     9091  # Transmission
+    8080  # Dashboard
     80    # Nginx
     443   # Nginx HTTPS
   ];
