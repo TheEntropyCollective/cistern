@@ -9,7 +9,7 @@
       systemd-boot.enable = true;
       efi.canTouchEfiVariables = true;
     };
-    cleanTmpDir = true;
+    tmp.cleanOnBoot = true;
   };
 
   # Networking
@@ -83,6 +83,9 @@
       options = "--delete-older-than 30d";
     };
   };
+
+  # Allow unfree packages (needed for SABnzbd's unrar dependency)
+  nixpkgs.config.allowUnfree = true;
 
   # System version
   system.stateVersion = "24.05";

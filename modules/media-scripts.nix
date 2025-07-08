@@ -3,7 +3,7 @@
 {
   # Media management scripts
   
-  # Create torrent completion script
+  # Create media management scripts
   systemd.tmpfiles.rules = [
     "L+ /var/lib/media/scripts/torrent-done.sh 0755 media media - ${pkgs.writeScript "torrent-done.sh" ''
       #!/bin/bash
@@ -35,10 +35,6 @@
       
       echo "$(date): Finished processing: $TR_TORRENT_NAME" >> "$LOG_FILE"
     ''}"
-  ];
-
-  # Service configuration script
-  systemd.tmpfiles.rules = [
     "L+ /var/lib/media/scripts/configure-services.sh 0755 media media - ${pkgs.writeScript "configure-services.sh" ''
       #!/bin/bash
       # Auto-configure media services with sensible defaults

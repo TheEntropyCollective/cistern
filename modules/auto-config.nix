@@ -12,7 +12,7 @@
   # Auto-configuration script that runs after services start
   systemd.services.media-auto-config = {
     description = "Auto-configure media services";
-    after = [ "network.target" "jellyfin.service" "sonarr.service" "radarr.service" "prowlarr.service" ];
+    after = [ "network.target" "jellyfin.service" "sonarr.service" "radarr.service" "prowlarr.service" "sabnzbd.service" ];
     wantedBy = [ "multi-user.target" ];
     
     serviceConfig = {
@@ -76,6 +76,21 @@
         }' \
         http://127.0.0.1:8989/api/v3/downloadclient >> "$LOG_FILE" 2>&1 || true
       
+      # Add SABnzbd to Sonarr
+      ${pkgs.curl}/bin/curl -s -X POST \
+        -H "Content-Type: application/json" \
+        -d '{
+          "enable": true,
+          "name": "SABnzbd",
+          "implementation": "Sabnzbd",
+          "settings": {
+            "host": "127.0.0.1",
+            "port": 8080,
+            "category": "sonarr"
+          }
+        }' \
+        http://127.0.0.1:8989/api/v3/downloadclient >> "$LOG_FILE" 2>&1 || true
+      
       # Add root folder for TV shows
       ${pkgs.curl}/bin/curl -s -X POST \
         -H "Content-Type: application/json" \
@@ -98,6 +113,21 @@
           "settings": {
             "host": "127.0.0.1",
             "port": 9091,
+            "category": "radarr"
+          }
+        }' \
+        http://127.0.0.1:7878/api/v3/downloadclient >> "$LOG_FILE" 2>&1 || true
+      
+      # Add SABnzbd to Radarr
+      ${pkgs.curl}/bin/curl -s -X POST \
+        -H "Content-Type: application/json" \
+        -d '{
+          "enable": true,
+          "name": "SABnzbd",
+          "implementation": "Sabnzbd",
+          "settings": {
+            "host": "127.0.0.1",
+            "port": 8080,
             "category": "radarr"
           }
         }' \

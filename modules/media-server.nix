@@ -25,6 +25,7 @@
     "d /mnt/media/books 0755 media media -"
     "d /mnt/media/downloads 0755 media media -"
     "d /mnt/media/downloads/.incomplete 0755 media media -"
+    "d /var/lib/media/config/sabnzbd 0755 media media -"
   ];
 
   # Jellyfin media server
@@ -67,6 +68,15 @@
       script-torrent-done-enabled = true;
       script-torrent-done-filename = "/var/lib/media/scripts/torrent-done.sh";
     };
+  };
+
+  # SABnzbd for Usenet management
+  services.sabnzbd = {
+    enable = true;
+    openFirewall = true;
+    user = "media";
+    group = "media";
+    configFile = "/var/lib/media/config/sabnzbd";
   };
 
   # Sonarr for TV show management
@@ -137,6 +147,10 @@
             proxyPass = "http://127.0.0.1:9091";
             proxyWebsockets = true;
           };
+          "/sabnzbd" = {
+            proxyPass = "http://127.0.0.1:8080";
+            proxyWebsockets = true;
+          };
         };
       };
     };
@@ -151,7 +165,8 @@
     9696  # Prowlarr
     6767  # Bazarr
     9091  # Transmission
-    8080  # Dashboard
+    8080  # SABnzbd
+    8081  # Dashboard
     80    # Nginx
     443   # Nginx HTTPS
   ];

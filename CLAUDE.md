@@ -107,11 +107,12 @@ nix flake check
 
 The system deploys a complete media stack with **automatic configuration**:
 - **Jellyfin**: Media server with web interface (auto-configured with Movies & TV libraries)
-- **Sonarr**: TV show management (auto-linked to Transmission & Prowlarr)
-- **Radarr**: Movie management (auto-linked to Transmission & Prowlarr)
+- **Sonarr**: TV show management (auto-linked to download clients & Prowlarr)
+- **Radarr**: Movie management (auto-linked to download clients & Prowlarr)
 - **Prowlarr**: Indexer management (auto-linked to Sonarr & Radarr)
 - **Bazarr**: Subtitle management
 - **Transmission**: Torrent client (auto-configured with proper categories)
+- **SABnzbd**: Usenet client (auto-configured with proper categories)
 - **Nginx**: Reverse proxy for all services
 - **Dashboard**: Web interface showing all services and status
 
@@ -119,9 +120,10 @@ All services are accessible through a unified web interface on port 80.
 
 ### Auto-Configuration Features
 - **Pre-configured media libraries**: Jellyfin automatically configured with Movies and TV Shows libraries
-- **Service interconnection**: Sonarr and Radarr automatically linked to Transmission for downloads
+- **Service interconnection**: Sonarr and Radarr automatically linked to both Transmission and SABnzbd
 - **Automatic file sorting**: Downloads automatically sorted into appropriate folders
 - **Root folder setup**: Media folders automatically configured in each service
+- **Dual download support**: Both torrent and Usenet downloading with automatic provider selection
 - **User-friendly dashboard**: Simple web interface to access all services
 
 ### Manual Configuration Script
@@ -162,12 +164,22 @@ Each server includes:
 - **Health checks**: Automated service monitoring
 - **System logs**: Centralized via Promtail
 
-## Standard Workflow - YOU MUST ALWAYS FOLLOW
-1. First think hard through the problem, read the codebase for relevant files, and write a plan to todo.md.
-2. The plan should have a list of todo items that you can check off as you complete them
+## Standard Workflow 
+1. First think hard through the problem (using Opus), read the codebase for relevant files, and write a plan to the "Current Milestone" section in todo.md.
+2. The plan should have a list of sprints and todo items in each sprint that you can check off as you complete them
 3. Before you begin working, check in with me and I will verify the plan.
-4. Then, begin working on the todo items, marking them as complete as you go.
+4. Then, begin working on the todos for the next sprint (using Sonnet), marking them as complete as you go.
 5. Please every step of the way just give me a high level explanation of what changes you made
 6. Make every task and code change you do as simple as possible. We want to avoid making any massive or complex changes. Every change should impact as little code as possible. Everything is about simplicity.
-7. Commit changes (don't include that changes were made by Claude code)
-8. Finally, add a review section to the todo.md file with a summary of the changes you made and any other relevant information.
+7. Git commit after every task (don't include anything about being created with Claude)
+8. When you are done with a sprint, update it as completed in todo.md
+9. When you complete a milestone, summarize it under "Completed Milestones"
+10. Push the completed milestone to github
+11. Ask about completing the next sprint or milestone. Suggest additional ideas for other milestones.
+
+- **Workflow Guideline**: YOU MUST ALWAYS FOLLOW the standard workflow
+
+## Development Practices
+
+- **Workflow Management**: 
+  - Always keep todo.md clean. Just the current milestone, the sprints and tasks for that milestone and the completed milestone

@@ -68,6 +68,12 @@
                       <p>Download client for torrents</p>
                       <a href="http://''${window.location.hostname}:9091" target="_blank">Open Transmission →</a>
                   </div>
+                  
+                  <div class="service">
+                      <h3>SABnzbd <span class="status ready">Ready</span></h3>
+                      <p>Download client for Usenet</p>
+                      <a href="http://''${window.location.hostname}:8080" target="_blank">Open SABnzbd →</a>
+                  </div>
               </div>
               
               <div class="footer">
@@ -95,14 +101,14 @@
     };
     
     script = ''
-      ${pkgs.python3}/bin/python3 -m http.server 8080
+      ${pkgs.python3}/bin/python3 -m http.server 8081
     '';
   };
 
   # Add dashboard to nginx
   services.nginx.virtualHosts."${config.networking.hostName}.local".locations = {
     "/dashboard" = {
-      proxyPass = "http://127.0.0.1:8080";
+      proxyPass = "http://127.0.0.1:8081";
     };
     "/status" = {
       alias = "/var/lib/media/auto-config/setup.log";
