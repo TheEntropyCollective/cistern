@@ -187,35 +187,8 @@ deploy_to_vm() {
     echo "Setting up VM configuration..."
     setup_vm_config
     
-    # Create a VM-specific host configuration
-    local vm_host_config="$FLAKE_DIR/hosts/vm-test.nix"
-    cat > "$vm_host_config" << 'EOF'
-{ config, pkgs, lib, ... }:
-
-{
-  imports = [
-    ../modules/base.nix
-    ../modules/media-server.nix  
-    ../modules/monitoring.nix
-    ../hardware/generic.nix
-  ];
-
-  networking.hostName = "cistern-test-vm";
-  
-  # VM-specific configurations
-  boot.kernelParams = [ "console=ttyS0,115200" ];
-  boot.loader.timeout = 1;
-  
-  # Simplified services for VM testing
-  services.jellyfin.enable = true;
-  services.nginx.enable = true;
-  
-  # Open firewall for testing
-  networking.firewall.allowedTCPPorts = [ 22 80 8096 ];
-  
-  system.stateVersion = "24.05";
-}
-EOF
+    # VM-specific host configuration already exists at hosts/vm-test.nix
+    # Don't overwrite it - it's managed by git
 
     echo "📦 Validating VM system configuration..."
     cd "$FLAKE_DIR"

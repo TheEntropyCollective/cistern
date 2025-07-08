@@ -51,6 +51,15 @@
           ];
           specialArgs = { inherit inputs; };
         };
+        
+        # Interactive VM test
+        test-vm = nixpkgs.lib.nixosSystem {
+          system = nixosSystem;
+          modules = [
+            ./test-vm.nix
+          ];
+          specialArgs = { inherit inputs; };
+        };
       };
 
       # Deploy-rs configuration for fleet management
@@ -92,6 +101,15 @@
             echo "  qemu-system-x86_64 - QEMU for VM testing"
             echo ""
           '';
+        });
+
+      # VM for testing
+      apps = forAllSystems (system: 
+        let pkgs = nixpkgs.legacyPackages.${system}; in {
+          vm = {
+            type = "app";
+            program = "${self.nixosConfigurations.test-vm.config.system.build.vm}/bin/run-cistern-test-vm";
+          };
         });
 
       # Utility scripts
