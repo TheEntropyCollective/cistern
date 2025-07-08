@@ -27,6 +27,7 @@
         ./modules/base.nix
         ./modules/media-server.nix
         ./modules/monitoring.nix
+        ./modules/privacy.nix
       ];
     in
     {

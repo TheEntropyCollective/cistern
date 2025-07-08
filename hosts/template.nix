@@ -30,6 +30,54 @@
   #   JELLYFIN_DATA_DIR = "/mnt/media/config/jellyfin";
   # };
 
+  # Privacy and authentication configuration
+  cistern.privacy = {
+    enable = true;
+    vpn = {
+      enable = false;  # Enable and configure VPN if needed
+      provider = "wireguard";
+      configFile = "/etc/wireguard/wg0.conf";
+      killSwitch = true;
+    };
+    dns = {
+      provider = "quad9";
+      dnsOverHttps = true;
+    };
+    authentication = {
+      enable = true;
+      # Default admin user will be created automatically
+      # Add additional users here:
+      # users = {
+      #   "admin" = "$2y$10$...";  # Use htpasswd to generate
+      # };
+    };
+  };
+
+  # Enable authentication for web services
+  cistern.auth = {
+    enable = true;
+    sessionTimeout = 7200;  # 2 hours
+    allowedIPs = [
+      "127.0.0.1"
+      "192.168.0.0/16"
+      "10.0.0.0/8"
+      "172.16.0.0/12"
+    ];
+  };
+
+  # Enable SSL certificates
+  cistern.ssl = {
+    enable = true;
+    domain = "${config.networking.hostName}.local";
+    selfSigned = true;  # Use self-signed certificates
+    certificateValidityDays = 365;
+    # For Let's Encrypt certificates, enable ACME:
+    # acme = {
+    #   enable = true;
+    #   email = "admin@example.com";
+    # };
+  };
+
   # Additional packages for this server
   environment.systemPackages = with pkgs; [
     # Add server-specific packages here

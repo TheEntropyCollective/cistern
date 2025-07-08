@@ -30,7 +30,7 @@
       </head>
       <body>
           <div class="container">
-              <h1>🎬 Cistern Media Server</h1>
+              <h1>&#127916; Cistern Media Server</h1>
               
               <div class="services">
                   <div class="service">
@@ -78,7 +78,10 @@
               
               <div class="footer">
                   <p>Cistern Media Server is ready! All services are pre-configured and ready to use.</p>
-                  <p>For help, check the <a href="/status">configuration status</a> or view the <a href="/logs">setup logs</a></p>
+                  <p>📋 <a href="/setup">View Setup Summary</a> | 📊 <a href="/logs">Setup Logs</a> | 🔧 <a href="/status">Configuration Status</a></p>
+                  <p style="font-size: 12px; color: #999; margin-top: 20px;">
+                    ✅ Auto-configured with Torrent + Usenet support | ✅ All services interconnected | ✅ Zero manual setup required
+                  </p>
               </div>
           </div>
       </body>
@@ -111,6 +114,18 @@
       proxyPass = "http://127.0.0.1:8081";
     };
     "/status" = {
+      alias = "/var/lib/media/auto-config/setup.log";
+      extraConfig = ''
+        default_type text/plain;
+      '';
+    };
+    "/setup" = {
+      alias = "/var/lib/media/auto-config/setup-summary.html";
+      extraConfig = ''
+        default_type text/html;
+      '';
+    };
+    "/logs" = {
       alias = "/var/lib/media/auto-config/setup.log";
       extraConfig = ''
         default_type text/plain;

@@ -8,6 +8,8 @@
     ./auto-config.nix
     ./media-scripts.nix
     ./web-dashboard.nix
+    ./auth.nix
+    ./ssl.nix
   ];
   
   # Create media group and directories
@@ -64,6 +66,18 @@
       rpc-host-whitelist-enabled = false;
       ratio-limit-enabled = true;
       ratio-limit = 2.0;
+      
+      # Privacy-focused settings
+      encryption = 2;  # Require encryption
+      dht-enabled = false;  # Disable DHT for privacy
+      lpd-enabled = false;  # Disable Local Peer Discovery  
+      pex-enabled = false;  # Disable Peer Exchange
+      peer-port-random-on-start = true;  # Randomize port
+      
+      # Connection limits for privacy
+      peer-limit-global = 50;
+      peer-limit-per-torrent = 10;
+      
       # Pre-configure categories for automatic sorting
       script-torrent-done-enabled = true;
       script-torrent-done-filename = "/var/lib/media/scripts/torrent-done.sh";
@@ -111,50 +125,9 @@
     group = "media";
   };
 
-  # Nginx reverse proxy for web services
-  services.nginx = {
-    enable = true;
-    recommendedTlsSettings = true;
-    recommendedOptimisation = true;
-    recommendedGzipSettings = true;
-    recommendedProxySettings = true;
-    
-    virtualHosts = {
-      # Main media server interface
-      "${config.networking.hostName}.local" = {
-        locations = {
-          "/" = {
-            proxyPass = "http://127.0.0.1:8096";
-            proxyWebsockets = true;
-          };
-          "/sonarr" = {
-            proxyPass = "http://127.0.0.1:8989";
-            proxyWebsockets = true;
-          };
-          "/radarr" = {
-            proxyPass = "http://127.0.0.1:7878";
-            proxyWebsockets = true;
-          };
-          "/prowlarr" = {
-            proxyPass = "http://127.0.0.1:9696";
-            proxyWebsockets = true;
-          };
-          "/bazarr" = {
-            proxyPass = "http://127.0.0.1:6767";
-            proxyWebsockets = true;
-          };
-          "/transmission" = {
-            proxyPass = "http://127.0.0.1:9091";
-            proxyWebsockets = true;
-          };
-          "/sabnzbd" = {
-            proxyPass = "http://127.0.0.1:8080";
-            proxyWebsockets = true;
-          };
-        };
-      };
-    };
-  };
+  # Nginx configuration is provided by auth.nix module
+  # Basic nginx setup for services that don't require auth
+  services.nginx.enable = lib.mkDefault true;
 
   # Open firewall ports for media services
   networking.firewall.allowedTCPPorts = [
