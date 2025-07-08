@@ -14,12 +14,8 @@
   boot.kernelParams = [ "console=ttyS0,115200" ];
   boot.loader.timeout = 1;
   
-  # Simplified services for VM testing
-  services.jellyfin.enable = true;
-  services.nginx.enable = true;
-  
-  # Open firewall for testing
-  networking.firewall.allowedTCPPorts = [ 22 80 8096 ];
+  # Additional firewall ports for VM testing
+  networking.firewall.allowedTCPPorts = [ 22 ];
   
   system.stateVersion = "24.05";
 }
