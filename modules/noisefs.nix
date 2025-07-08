@@ -22,6 +22,12 @@ with lib;
     };
     
     ipfs = {
+      networkMode = mkOption {
+        type = types.enum [ "private" "public" ];
+        default = "private";
+        description = "IPFS network mode: private (fleet-only) or public (global IPFS network)";
+      };
+      
       dataDir = mkOption {
         type = types.str;
         default = "/var/lib/ipfs";
@@ -31,7 +37,7 @@ with lib;
       swarmKey = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "Private IPFS swarm key (leave null to auto-generate)";
+        description = "Private IPFS swarm key (only used in private mode, leave null to auto-generate)";
       };
       
       apiPort = mkOption {
@@ -77,7 +83,7 @@ with lib;
       servers = mkOption {
         type = types.listOf types.str;
         default = [];
-        description = "List of server IPs in the Cistern fleet";
+        description = "List of server IPs in the Cistern fleet (exclusive peers in private mode, additional peers in public mode)";
       };
     };
   };
@@ -135,44 +141,74 @@ with lib;
       
       script = ''
         if [ ! -f "${config.cistern.noisefs.ipfs.dataDir}/config" ]; then
-          echo "Initializing IPFS node..."
+          echo "Initializing IPFS node for ${config.cistern.noisefs.ipfs.networkMode} network..."
           ${pkgs.kubo}/bin/ipfs init
           
-          # Configure IPFS for private network
+          # Configure IPFS addresses
           ${pkgs.kubo}/bin/ipfs config Addresses.API /ip4/127.0.0.1/tcp/${toString config.cistern.noisefs.ipfs.apiPort}
           ${pkgs.kubo}/bin/ipfs config Addresses.Gateway /ip4/127.0.0.1/tcp/${toString config.cistern.noisefs.ipfs.gatewayPort}
           ${pkgs.kubo}/bin/ipfs config Addresses.Swarm '["/ip4/0.0.0.0/tcp/${toString config.cistern.noisefs.ipfs.swarmPort}"]'
           
-          # Remove all default bootstrap nodes (disconnect from public network)
-          ${pkgs.kubo}/bin/ipfs bootstrap rm --all
-          
-          # Add fleet servers as bootstrap peers
-          ${concatStringsSep "\n" (map (server: ''
-            if [ "${server}" != "$(hostname -I | awk '{print $1}')" ]; then
-              echo "Adding bootstrap peer: ${server}"
-              # Note: Peer ID will be discovered automatically
-              ${pkgs.kubo}/bin/ipfs bootstrap add /ip4/${server}/tcp/${toString config.cistern.noisefs.ipfs.swarmPort} || true
-            fi
-          '') config.cistern.noisefs.fleet.servers)}
-          
-          echo "IPFS node initialized for private network"
+          ${if config.cistern.noisefs.ipfs.networkMode == "private" then ''
+            # Private network configuration
+            echo "Configuring for private network..."
+            
+            # Remove all default bootstrap nodes (disconnect from public network)
+            ${pkgs.kubo}/bin/ipfs bootstrap rm --all
+            
+            # Add fleet servers as bootstrap peers
+            ${concatStringsSep "\n" (map (server: ''
+              if [ "${server}" != "$(hostname -I | awk '{print $1}')" ]; then
+                echo "Adding bootstrap peer: ${server}"
+                # Note: Peer ID will be discovered automatically
+                ${pkgs.kubo}/bin/ipfs bootstrap add /ip4/${server}/tcp/${toString config.cistern.noisefs.ipfs.swarmPort} || true
+              fi
+            '') config.cistern.noisefs.fleet.servers)}
+            
+            echo "IPFS node initialized for private network"
+          '' else ''
+            # Public network configuration
+            echo "Configuring for public network..."
+            
+            # Keep default bootstrap nodes for public network access
+            echo "Using default public IPFS bootstrap nodes"
+            
+            # Add fleet servers as additional bootstrap peers
+            ${concatStringsSep "\n" (map (server: ''
+              if [ "${server}" != "$(hostname -I | awk '{print $1}')" ]; then
+                echo "Adding additional fleet peer: ${server}"
+                ${pkgs.kubo}/bin/ipfs bootstrap add /ip4/${server}/tcp/${toString config.cistern.noisefs.ipfs.swarmPort} || true
+              fi
+            '') config.cistern.noisefs.fleet.servers)}
+            
+            echo "IPFS node initialized for public network with fleet peers"
+          ''}
         fi
         
-        # Generate or set swarm key for private network
-        SWARM_KEY_FILE="${config.cistern.noisefs.ipfs.dataDir}/swarm.key"
-        if [ ! -f "$SWARM_KEY_FILE" ]; then
-          ${if config.cistern.noisefs.ipfs.swarmKey != null then ''
-            echo "Using provided swarm key"
-            echo "${config.cistern.noisefs.ipfs.swarmKey}" > "$SWARM_KEY_FILE"
-          '' else ''
-            echo "Generating new swarm key"
-            echo -e "/key/swarm/psk/1.0.0/\n/base16/\n$(tr -dc 'a-f0-9' < /dev/urandom | head -c64)" > "$SWARM_KEY_FILE"
-            echo "Generated swarm key. Share this key with other fleet members:"
-            cat "$SWARM_KEY_FILE"
-          ''}
-          chmod 600 "$SWARM_KEY_FILE"
-          chown ipfs:ipfs "$SWARM_KEY_FILE"
-        fi
+        ${if config.cistern.noisefs.ipfs.networkMode == "private" then ''
+          # Generate or set swarm key for private network
+          SWARM_KEY_FILE="${config.cistern.noisefs.ipfs.dataDir}/swarm.key"
+          if [ ! -f "$SWARM_KEY_FILE" ]; then
+            ${if config.cistern.noisefs.ipfs.swarmKey != null then ''
+              echo "Using provided swarm key for private network"
+              echo "${config.cistern.noisefs.ipfs.swarmKey}" > "$SWARM_KEY_FILE"
+            '' else ''
+              echo "Generating new swarm key for private network"
+              echo -e "/key/swarm/psk/1.0.0/\n/base16/\n$(tr -dc 'a-f0-9' < /dev/urandom | head -c64)" > "$SWARM_KEY_FILE"
+              echo "Generated swarm key. Share this key with other fleet members:"
+              cat "$SWARM_KEY_FILE"
+            ''}
+            chmod 600 "$SWARM_KEY_FILE"
+            chown ipfs:ipfs "$SWARM_KEY_FILE"
+          fi
+        '' else ''
+          # Ensure no swarm key exists for public network
+          SWARM_KEY_FILE="${config.cistern.noisefs.ipfs.dataDir}/swarm.key"
+          if [ -f "$SWARM_KEY_FILE" ]; then
+            echo "Removing swarm key for public network mode"
+            rm -f "$SWARM_KEY_FILE"
+          fi
+        ''}
       '';
     };
 
@@ -191,7 +227,8 @@ with lib;
         RestartSec = "10s";
         Environment = [
           "IPFS_PATH=${config.cistern.noisefs.ipfs.dataDir}"
-          "LIBP2P_FORCE_PNET=1"  # Force private network
+        ] ++ optionals (config.cistern.noisefs.ipfs.networkMode == "private") [
+          "LIBP2P_FORCE_PNET=1"  # Force private network (only in private mode)
         ];
         ExecStart = "${pkgs.kubo}/bin/ipfs daemon --enable-gc";
         ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
@@ -414,7 +451,16 @@ with lib;
       (pkgs.writeShellScriptBin "cistern-noisefs-swarm" ''
         #!/usr/bin/env bash
         
+        NETWORK_MODE="${config.cistern.noisefs.ipfs.networkMode}"
         SWARM_KEY_FILE="${config.cistern.noisefs.ipfs.dataDir}/swarm.key"
+        
+        # Check if we're in private mode
+        if [ "$NETWORK_MODE" != "private" ]; then
+          echo "ERROR: Swarm key management is only available in private network mode"
+          echo "Current mode: $NETWORK_MODE"
+          echo "To use private network mode, set cistern.noisefs.ipfs.networkMode = \"private\""
+          exit 1
+        fi
         
         case "''${1:-help}" in
           generate)
@@ -503,6 +549,13 @@ with lib;
         case "''${1:-help}" in
           status)
             echo "=== NoiseFS Status ==="
+            echo "Network Mode: ${config.cistern.noisefs.ipfs.networkMode}"
+            ${if config.cistern.noisefs.ipfs.networkMode == "private" then ''
+              echo "Private Network: Fleet-only peers"
+            '' else ''
+              echo "Public Network: Global IPFS + fleet peers"
+            ''}
+            echo ""
             systemctl status ipfs noisefs noisefs-mount --no-pager
             echo ""
             echo "=== IPFS Peers ==="
@@ -521,8 +574,13 @@ with lib;
             ${pkgs.curl}/bin/curl -s -X POST http://127.0.0.1:${toString config.cistern.noisefs.ipfs.apiPort}/api/v0/swarm/peers | ${pkgs.jq}/bin/jq '.Peers[] | .Addr' 2>/dev/null || echo "No peers connected"
             ;;
           swarm-key)
-            echo "Current swarm key:"
-            cat ${config.cistern.noisefs.ipfs.dataDir}/swarm.key 2>/dev/null || echo "Swarm key not found"
+            echo "Network Mode: ${config.cistern.noisefs.ipfs.networkMode}"
+            ${if config.cistern.noisefs.ipfs.networkMode == "private" then ''
+              echo "Current swarm key:"
+              cat ${config.cistern.noisefs.ipfs.dataDir}/swarm.key 2>/dev/null || echo "Swarm key not found"
+            '' else ''
+              echo "Swarm key not used in public network mode"
+            ''}
             ;;
           restart)
             echo "Restarting NoiseFS services..."
@@ -538,11 +596,20 @@ with lib;
           *)
             echo "Cistern NoiseFS Management"
             echo "Usage: $0 {status|peers|swarm-key|restart|logs}"
-            echo "  status     - Show service status and mount info"
+            echo "  status     - Show service status, network mode, and mount info"
             echo "  peers      - Show connected IPFS peers"
-            echo "  swarm-key  - Display swarm key for private network"
+            echo "  swarm-key  - Display swarm key (private mode only)"
             echo "  restart    - Restart all NoiseFS services"
             echo "  logs       - Show recent service logs"
+            echo ""
+            echo "Network Mode: ${config.cistern.noisefs.ipfs.networkMode}"
+            ${if config.cistern.noisefs.ipfs.networkMode == "private" then ''
+              echo "  - Private: Fleet-only IPFS network with swarm key"
+              echo "  - Use 'cistern-noisefs-swarm' for swarm key management"
+            '' else ''
+              echo "  - Public: Global IPFS network + fleet peers"
+              echo "  - Swarm key management not available in public mode"
+            ''}
             ;;
         esac
       '')

@@ -78,17 +78,18 @@
     # };
   };
 
-  # Enable NoiseFS with private IPFS network
+  # Enable NoiseFS distributed storage
   cistern.noisefs = {
     enable = true;
     mountPoint = "/mnt/media/noisefs";
     
-    # Configure private IPFS network
+    # Configure IPFS network
     ipfs = {
+      networkMode = "private";  # "private" for fleet-only, "public" for global IPFS
       apiPort = 5001;
       gatewayPort = 8081;
       swarmPort = 4001;
-      # swarmKey = ""; # Set same key across all fleet members
+      # swarmKey = ""; # Only used in private mode, set same key across fleet
     };
     
     # NoiseFS configuration
@@ -106,6 +107,22 @@
       ];
     };
   };
+  
+  # NoiseFS Network Mode Explanation:
+  # 
+  # PRIVATE MODE (default):
+  # - Creates isolated IPFS network using only fleet servers
+  # - Requires swarm key shared across all servers
+  # - Data never leaves your infrastructure
+  # - Maximum privacy and security
+  # - Use: cistern-noisefs-swarm for key management
+  #
+  # PUBLIC MODE:
+  # - Connects to global IPFS network + fleet servers
+  # - No swarm key needed
+  # - Access to global IPFS content and redundancy
+  # - NoiseFS anonymization still protects file content
+  # - Better performance from larger network
 
   # Additional packages for this server
   environment.systemPackages = with pkgs; [
