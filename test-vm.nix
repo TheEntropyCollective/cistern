@@ -46,7 +46,7 @@
       };
       
       # Allow SSH with password for testing
-      services.openssh.settings.PasswordAuthentication = true;
+      services.openssh.settings.PasswordAuthentication = lib.mkForce true;
     };
   };
 
