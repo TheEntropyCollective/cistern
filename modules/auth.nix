@@ -9,6 +9,12 @@ with lib;
   options.cistern.auth = {
     enable = mkEnableOption "Enable authentication for web services";
     
+    method = mkOption {
+      type = types.enum [ "basic" "authentik" ];
+      default = "basic";
+      description = "Authentication method: basic (htpasswd) or authentik (SSO)";
+    };
+    
     users = mkOption {
       type = types.attrsOf types.str;
       default = {};
@@ -16,7 +22,7 @@ with lib;
         "admin" = "$2y$10$..."; # bcrypt hash
         "user" = "$2y$10$...";
       };
-      description = "Username to bcrypt password hash mapping";
+      description = "Username to bcrypt password hash mapping (basic auth only)";
     };
     
     sessionTimeout = mkOption {
@@ -30,17 +36,37 @@ with lib;
       default = [ "127.0.0.1" "192.168.0.0/16" "10.0.0.0/8" "172.16.0.0/12" ];
       description = "IP addresses/ranges allowed to access services";
     };
+    
+    authentik = {
+      domain = mkOption {
+        type = types.str;
+        default = config.cistern.authentik.domain or "auth.${config.networking.hostName}.local";
+        description = "Authentik domain for auth_request";
+      };
+      
+      provider = mkOption {
+        type = types.str;
+        default = "cistern-proxy-provider";
+        description = "Authentik proxy provider name";
+      };
+      
+      outpost = mkOption {
+        type = types.str;
+        default = config.cistern.authentik.outpost.name or "cistern-nginx-outpost";
+        description = "Authentik outpost name";
+      };
+    };
   };
 
   config = mkIf config.cistern.auth.enable {
     
-    # Generate htpasswd file for nginx auth
-    systemd.tmpfiles.rules = [
+    # Basic auth configuration (htpasswd)
+    systemd.tmpfiles.rules = mkIf (config.cistern.auth.method == "basic") [
       "d /var/lib/cistern/auth 0755 nginx nginx -"
     ];
 
-    # Create htpasswd file from user configuration
-    systemd.services.cistern-auth-setup = {
+    # Create htpasswd file from user configuration (basic auth only)
+    systemd.services.cistern-auth-setup = mkIf (config.cistern.auth.method == "basic") {
       description = "Setup Cistern authentication";
       wantedBy = [ "multi-user.target" ];
       before = [ "nginx.service" ];
@@ -100,10 +126,80 @@ with lib;
           ~^/auth/login 0;
           ~^/auth/logout 0;
           ~^/health 0;
+          ${optionalString (config.cistern.auth.method == "authentik") ''~^/outpost.goauthentik.io 0;''}
         }
+        
+        ${optionalString (config.cistern.auth.method == "authentik") ''
+        # Authentik auth subrequest configuration
+        # Forward auth endpoint
+        location = /outpost.goauthentik.io/auth/nginx {
+          internal;
+          proxy_pass http://${config.cistern.auth.authentik.domain}/outpost.goauthentik.io/auth/nginx;
+          proxy_pass_request_body off;
+          proxy_set_header Content-Length "";
+          proxy_set_header X-Original-URL $scheme://$http_host$request_uri;
+          proxy_set_header Host $http_host;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+          proxy_set_header X-Forwarded-Host $host;
+          proxy_set_header X-Forwarded-Uri $request_uri;
+          
+          # Capture auth headers
+          auth_request_set $user $upstream_http_remote_user;
+          auth_request_set $name $upstream_http_remote_name;
+          auth_request_set $email $upstream_http_remote_email;
+          auth_request_set $groups $upstream_http_remote_groups;
+          
+          # Buffer settings for large headers
+          proxy_buffer_size 128k;
+          proxy_buffers 4 256k;
+          proxy_busy_buffers_size 256k;
+        }
+        
+        # Authentik sign-in endpoint
+        location @goauthentik_proxy_signin {
+          internal;
+          add_header Set-Cookie $auth_cookie;
+          return 302 /outpost.goauthentik.io/start?rd=$request_uri;
+        }
+        ''}
       '';
       
-      virtualHosts = {
+      virtualHosts = let
+        # Helper function to generate auth configuration
+        authConfig = service: 
+          if config.cistern.auth.method == "authentik" then ''
+            # Authentik forward auth
+            auth_request /outpost.goauthentik.io/auth/nginx;
+            error_page 401 = @goauthentik_proxy_signin;
+            
+            # Pass authentication headers to upstream
+            auth_request_set $user $upstream_http_remote_user;
+            auth_request_set $name $upstream_http_remote_name;
+            auth_request_set $email $upstream_http_remote_email;
+            auth_request_set $groups $upstream_http_remote_groups;
+            proxy_set_header Remote-User $user;
+            proxy_set_header Remote-Name $name;
+            proxy_set_header Remote-Email $email;
+            proxy_set_header Remote-Groups $groups;
+            
+            # Rate limiting
+            limit_req zone=auth burst=10 nodelay;
+            
+            # IP whitelist
+            ${concatStringsSep "\n            " (map (ip: "allow ${ip};") config.cistern.auth.allowedIPs)}
+            deny all;
+          '' else ''
+            # Basic authentication
+            auth_basic "Cistern Media Server";
+            auth_basic_user_file /var/lib/cistern/auth/htpasswd;
+            limit_req zone=auth burst=10 nodelay;
+            
+            # IP whitelist
+            ${concatStringsSep "\n            " (map (ip: "allow ${ip};") config.cistern.auth.allowedIPs)}
+            deny all;
+          '';
+      in {
         # Main media server interface with authentication
         "${config.networking.hostName}.local" = {
           # SSL configuration will be handled by ssl.nix if enabled
@@ -129,15 +225,7 @@ with lib;
             "/dashboard" = {
               proxyPass = "http://127.0.0.1:8081";
               proxyWebsockets = true;
-              extraConfig = ''
-                auth_basic "Cistern Media Server";
-                auth_basic_user_file /var/lib/cistern/auth/htpasswd;
-                limit_req zone=auth burst=10 nodelay;
-                
-                # IP whitelist
-                ${concatStringsSep "\n                " (map (ip: "allow ${ip};") config.cistern.auth.allowedIPs)}
-                deny all;
-              '';
+              extraConfig = authConfig "dashboard";
             };
             
             # Jellyfin with auth
@@ -145,13 +233,7 @@ with lib;
               proxyPass = "http://127.0.0.1:8096";
               proxyWebsockets = true;
               extraConfig = ''
-                auth_basic "Cistern Media Server";
-                auth_basic_user_file /var/lib/cistern/auth/htpasswd;
-                limit_req zone=auth burst=10 nodelay;
-                
-                # IP whitelist
-                ${concatStringsSep "\n                " (map (ip: "allow ${ip};") config.cistern.auth.allowedIPs)}
-                deny all;
+                ${authConfig "jellyfin"}
                 
                 # Jellyfin specific headers
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -164,90 +246,42 @@ with lib;
             "/sonarr" = {
               proxyPass = "http://127.0.0.1:8989";
               proxyWebsockets = true;
-              extraConfig = ''
-                auth_basic "Cistern Media Server";
-                auth_basic_user_file /var/lib/cistern/auth/htpasswd;
-                limit_req zone=auth burst=10 nodelay;
-                
-                # IP whitelist
-                ${concatStringsSep "\n                " (map (ip: "allow ${ip};") config.cistern.auth.allowedIPs)}
-                deny all;
-              '';
+              extraConfig = authConfig "sonarr";
             };
             
             # Radarr with auth
             "/radarr" = {
               proxyPass = "http://127.0.0.1:7878";
               proxyWebsockets = true;
-              extraConfig = ''
-                auth_basic "Cistern Media Server";
-                auth_basic_user_file /var/lib/cistern/auth/htpasswd;
-                limit_req zone=auth burst=10 nodelay;
-                
-                # IP whitelist
-                ${concatStringsSep "\n                " (map (ip: "allow ${ip};") config.cistern.auth.allowedIPs)}
-                deny all;
-              '';
+              extraConfig = authConfig "radarr";
             };
             
             # Prowlarr with auth
             "/prowlarr" = {
               proxyPass = "http://127.0.0.1:9696";
               proxyWebsockets = true;
-              extraConfig = ''
-                auth_basic "Cistern Media Server";
-                auth_basic_user_file /var/lib/cistern/auth/htpasswd;
-                limit_req zone=auth burst=10 nodelay;
-                
-                # IP whitelist
-                ${concatStringsSep "\n                " (map (ip: "allow ${ip};") config.cistern.auth.allowedIPs)}
-                deny all;
-              '';
+              extraConfig = authConfig "prowlarr";
             };
             
             # Bazarr with auth
             "/bazarr" = {
               proxyPass = "http://127.0.0.1:6767";
               proxyWebsockets = true;
-              extraConfig = ''
-                auth_basic "Cistern Media Server";
-                auth_basic_user_file /var/lib/cistern/auth/htpasswd;
-                limit_req zone=auth burst=10 nodelay;
-                
-                # IP whitelist
-                ${concatStringsSep "\n                " (map (ip: "allow ${ip};") config.cistern.auth.allowedIPs)}
-                deny all;
-              '';
+              extraConfig = authConfig "bazarr";
             };
             
             # Transmission with auth
             "/transmission" = {
               proxyPass = "http://127.0.0.1:9091";
               proxyWebsockets = true;
-              extraConfig = ''
-                auth_basic "Cistern Media Server";
-                auth_basic_user_file /var/lib/cistern/auth/htpasswd;
-                limit_req zone=auth burst=10 nodelay;
-                
-                # IP whitelist
-                ${concatStringsSep "\n                " (map (ip: "allow ${ip};") config.cistern.auth.allowedIPs)}
-                deny all;
-              '';
+              extraConfig = authConfig "transmission";
             };
             
             # SABnzbd with auth
             "/sabnzbd" = {
               proxyPass = "http://127.0.0.1:8080";
               proxyWebsockets = true;
-              extraConfig = ''
-                auth_basic "Cistern Media Server";
-                auth_basic_user_file /var/lib/cistern/auth/htpasswd;
-                limit_req zone=auth burst=10 nodelay;
-                
-                # IP whitelist
-                ${concatStringsSep "\n                " (map (ip: "allow ${ip};") config.cistern.auth.allowedIPs)}
-                deny all;
-              '';
+              extraConfig = authConfig "sabnzbd";
             };
             
             # API endpoints with rate limiting but no basic auth (apps use API keys)
@@ -276,8 +310,8 @@ with lib;
     # Note: Sonarr and Radarr authentication is handled via nginx proxy
     # The services themselves don't have built-in NixOS authentication options
 
-    # Enhanced security logging
-    systemd.services.auth-monitor = {
+    # Enhanced security logging (basic auth only)
+    systemd.services.auth-monitor = mkIf (config.cistern.auth.method == "basic") {
       description = "Monitor authentication attempts";
       serviceConfig = {
         Type = "oneshot";
@@ -306,7 +340,7 @@ with lib;
       };
     };
 
-    systemd.timers.auth-monitor = {
+    systemd.timers.auth-monitor = mkIf (config.cistern.auth.method == "basic") {
       description = "Monitor authentication every 10 minutes";
       wantedBy = [ "timers.target" ];
       timerConfig = {
@@ -315,14 +349,15 @@ with lib;
       };
     };
 
-    # Password generation utility
+    # Password generation utility (basic auth only)
     environment.systemPackages = with pkgs; [
-      apacheHttpd  # for htpasswd
       openssl      # for password generation
+    ] ++ optionals (config.cistern.auth.method == "basic") [
+      apacheHttpd  # for htpasswd
     ];
 
-    # User management script
-    systemd.services.cistern-user-manager = {
+    # User management script (basic auth only)
+    systemd.services.cistern-user-manager = mkIf (config.cistern.auth.method == "basic") {
       description = "Cistern user management service";
       serviceConfig = {
         Type = "oneshot";

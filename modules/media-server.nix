@@ -29,6 +29,10 @@
     "d /mnt/media/downloads 0755 media media -"
     "d /mnt/media/downloads/.incomplete 0755 media media -"
     "d /var/lib/media/config/sabnzbd 0755 media media -"
+  ] ++ lib.optionals (config.cistern.auth.enable && config.cistern.auth.method == "authentik") [
+    # Jellyfin SSO plugin directories
+    "d /var/lib/media/config/jellyfin/plugins 0755 media media -"
+    "d /var/lib/media/config/jellyfin/config 0755 media media -"
   ];
 
   # Jellyfin media server
@@ -40,6 +44,109 @@
     dataDir = "/var/lib/media/config/jellyfin";
     cacheDir = "/var/lib/media/cache/jellyfin";
   };
+
+  # Jellyfin SSO plugin configuration (when Authentik is enabled)
+  systemd.services.jellyfin-sso-setup = lib.mkIf (config.cistern.auth.enable && config.cistern.auth.method == "authentik") {
+    description = "Configure Jellyfin SSO plugin for Authentik";
+    after = [ "jellyfin.service" "authentik-server.service" ];
+    requires = [ "jellyfin.service" "authentik-server.service" ];
+    wantedBy = [ "multi-user.target" ];
+    
+    serviceConfig = {
+      Type = "oneshot";
+      User = "media";
+      Group = "media";
+      RemainAfterExit = true;
+    };
+    
+    script = ''
+      JELLYFIN_CONFIG_DIR="/var/lib/media/config/jellyfin"
+      PLUGINS_DIR="$JELLYFIN_CONFIG_DIR/plugins"
+      SSO_PLUGIN_DIR="$PLUGINS_DIR/SSO Authentication"
+      
+      # Create plugins directory
+      mkdir -p "$SSO_PLUGIN_DIR"
+      
+      # Download Jellyfin SSO plugin if not exists
+      if [ ! -f "$SSO_PLUGIN_DIR/SSO-Authentication.dll" ]; then
+        echo "Downloading Jellyfin SSO plugin..."
+        ${pkgs.curl}/bin/curl -L -o "/tmp/sso-plugin.zip" \
+          "https://github.com/9p4/jellyfin-plugin-sso/releases/latest/download/sso-authentication.zip"
+        
+        ${pkgs.unzip}/bin/unzip -o "/tmp/sso-plugin.zip" -d "$SSO_PLUGIN_DIR"
+        rm -f "/tmp/sso-plugin.zip"
+        
+        # Set proper permissions
+        chown -R media:media "$PLUGINS_DIR"
+        
+        echo "Jellyfin SSO plugin installed"
+      fi
+      
+      # Create SSO plugin configuration
+      SSO_CONFIG_FILE="$JELLYFIN_CONFIG_DIR/config/SSO-Authentication.xml"
+      mkdir -p "$(dirname "$SSO_CONFIG_FILE")"
+      
+      if [ ! -f "$SSO_CONFIG_FILE" ]; then
+        cat > "$SSO_CONFIG_FILE" << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<PluginConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <SamlConfigs>
+    <SamlConfig>
+      <SamlEndpoint>https://${config.cistern.auth.authentik.domain}/application/saml/cistern-jellyfin/sso/binding/redirect/</SamlEndpoint>
+      <SamlClientId>cistern-jellyfin</SamlClientId>
+      <SamlCertificate></SamlCertificate>
+      <Enabled>true</Enabled>
+      <EnableAuthorization>true</EnableAuthorization>
+      <EnableAllFolders>true</EnableAllFolders>
+      <EnabledFolders />
+      <AdminAttribute>admin</AdminAttribute>
+      <LibraryAccessAttribute>library_access</LibraryAccessAttribute>
+      <DefaultProvider>Authentik</DefaultProvider>
+      <SchemeTypes>
+        <string>saml</string>
+      </SchemeTypes>
+    </SamlConfig>
+  </SamlConfigs>
+  <OidConfigs>
+    <OidConfig>
+      <OidEndpoint>https://${config.cistern.auth.authentik.domain}/application/o/cistern-jellyfin/</OidEndpoint>
+      <OidClientId>cistern-jellyfin</OidClientId>
+      <OidSecret></OidSecret>
+      <Enabled>true</Enabled>
+      <EnableAuthorization>true</EnableAuthorization>
+      <EnableAllFolders>true</EnableAllFolders>
+      <EnabledFolders />
+      <AdminAttribute>admin</AdminAttribute>
+      <LibraryAccessAttribute>library_access</LibraryAccessAttribute>
+      <DefaultProvider>Authentik</DefaultProvider>
+      <SchemeTypes>
+        <string>oid</string>
+      </SchemeTypes>
+    </OidConfig>
+  </OidConfigs>
+  <TimerConfig>
+    <Enabled>false</Enabled>
+    <TimerIntervalHours>24</TimerIntervalHours>
+  </TimerConfig>
+</PluginConfiguration>
+EOF
+        
+        chown media:media "$SSO_CONFIG_FILE"
+        echo "Jellyfin SSO configuration created"
+      fi
+      
+      # Restart Jellyfin to load the plugin
+      ${pkgs.systemd}/bin/systemctl restart jellyfin
+      
+      echo "Jellyfin SSO plugin setup completed"
+      echo "Manual configuration steps required:"
+      echo "1. Access Jellyfin admin dashboard"
+      echo "2. Go to Plugins → SSO Authentication"
+      echo "3. Configure Authentik provider settings"
+      echo "4. Set up OIDC client secret from Authentik"
+    '';
+  };
+
 
   # Additional media server options (uncomment as needed)
   

@@ -29,6 +29,7 @@
         ./modules/monitoring.nix
         ./modules/privacy.nix
         ./modules/noisefs.nix
+        ./modules/authentik.nix
       ];
     in
     {

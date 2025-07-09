@@ -56,6 +56,7 @@
   # Enable authentication for web services
   cistern.auth = {
     enable = true;
+    method = "basic";  # "basic" for htpasswd auth, "authentik" for SSO
     sessionTimeout = 7200;  # 2 hours
     allowedIPs = [
       "127.0.0.1"
@@ -63,6 +64,65 @@
       "10.0.0.0/8"
       "172.16.0.0/12"
     ];
+    
+    # Basic authentication users (when method = "basic")
+    users = {
+      # Default admin user will be created automatically
+      # Add additional users here:
+      # "admin" = "$2y$10$...";  # Use htpasswd to generate
+    };
+    
+    # Authentik configuration (when method = "authentik")
+    authentik = {
+      domain = "auth.${config.networking.hostName}.local";
+      provider = "cistern-proxy-provider";
+      outpost = "cistern-nginx-outpost";
+    };
+  };
+
+  # Enable Authentik SSO identity provider (optional)
+  cistern.authentik = {
+    enable = false;  # Set to true to enable Authentik
+    domain = "auth.${config.networking.hostName}.local";
+    
+    # Database configuration
+    database = {
+      host = "localhost";
+      port = 5432;
+      name = "authentik";
+      user = "authentik";
+      # passwordFile will be auto-generated if not specified
+    };
+    
+    # Redis configuration
+    redis = {
+      host = "localhost";
+      port = 6379;
+    };
+    
+    # Admin user
+    admin = {
+      email = "admin@${config.networking.hostName}.local";
+      username = "admin";
+      # passwordFile will be auto-generated if not specified
+    };
+    
+    # SMTP configuration (optional)
+    smtp = {
+      enable = false;
+      host = "";  # e.g., "smtp.gmail.com"
+      port = 587;
+      user = "";  # e.g., "your-email@gmail.com"
+      from = "authentik@${config.networking.hostName}.local";
+      useTLS = true;
+      # passwordFile = "/var/lib/cistern/authentik/smtp-password";
+    };
+    
+    # Outpost configuration
+    outpost = {
+      name = "cistern-nginx-outpost";
+      # token will be auto-generated if not specified
+    };
   };
 
   # Enable SSL certificates
@@ -77,6 +137,27 @@
     #   email = "admin@example.com";
     # };
   };
+
+  # Authentication Mode Configuration:
+  #
+  # BASIC AUTHENTICATION (default):
+  # - Simple htpasswd-based authentication
+  # - Users defined in cistern.auth.users
+  # - Suitable for personal use or small teams
+  # - No external dependencies
+  #
+  # AUTHENTIK SSO:
+  # - Modern identity provider with SSO, 2FA, OIDC
+  # - Requires PostgreSQL and Redis
+  # - Supports multiple authentication methods
+  # - Centralized user management and audit logs
+  # - To enable: Set cistern.authentik.enable = true and cistern.auth.method = "authentik"
+  #
+  # Example Authentik setup:
+  # 1. Set cistern.authentik.enable = true
+  # 2. Set cistern.auth.method = "authentik"
+  # 3. Configure SMTP for email notifications (optional)
+  # 4. Deploy and access https://auth.hostname.local to complete setup
 
   # Enable NoiseFS distributed storage
   cistern.noisefs = {
