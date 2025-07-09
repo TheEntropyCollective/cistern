@@ -64,7 +64,6 @@
           active_index_directory = "/var/lib/loki/boltdb-shipper-active";
           cache_location = "/var/lib/loki/boltdb-shipper-cache";
           cache_ttl = "24h";
-          shared_store = "filesystem";
         };
 
         filesystem = {
@@ -77,10 +76,6 @@
         reject_old_samples_max_age = "168h";
       };
 
-      chunk_store_config = {
-        max_look_back_period = "0s";
-      };
-
       table_manager = {
         retention_deletes_enabled = false;
         retention_period = "0s";
@@ -88,7 +83,6 @@
 
       compactor = {
         working_directory = "/var/lib/loki";
-        shared_store = "filesystem";
         compaction_interval = "10m";
         retention_enabled = true;
         retention_delete_delay = "2h";
