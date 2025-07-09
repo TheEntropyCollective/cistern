@@ -208,7 +208,7 @@ with lib;
             "/auth/login" = {
               return = "200 '<html><body><h1>Login Required</h1><p>Access your media server dashboard to login.</p></body></html>'";
               extraConfig = ''
-                add_header Content-Type text/html;
+                add_header Content-Type "text/html";
               '';
             };
             
@@ -216,7 +216,7 @@ with lib;
             "/health" = {
               return = "200 'OK'";
               extraConfig = ''
-                add_header Content-Type text/plain;
+                add_header Content-Type "text/plain";
                 access_log off;
               '';
             };

@@ -154,8 +154,8 @@ EOF
     services.nginx = {
       enable = true;
       
-      # Add SSL configuration
-      appendConfig = ''
+      # Add SSL configuration using mkAfter to ensure it comes after auth module
+      appendConfig = lib.mkAfter ''
         # SSL Configuration
         ssl_protocols TLSv1.2 TLSv1.3;
         ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
