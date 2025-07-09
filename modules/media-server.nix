@@ -10,6 +10,7 @@
     ./web-dashboard.nix
     ./auth.nix
     ./ssl.nix
+    ./nginx.nix
   ];
   
   # Create media group and directories

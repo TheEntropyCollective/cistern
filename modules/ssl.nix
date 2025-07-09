@@ -150,40 +150,7 @@ EOF
       };
     };
 
-    # Enhanced nginx configuration with SSL
-    services.nginx = {
-      enable = true;
-      
-      # Add SSL configuration only (security headers moved to auth module)
-      appendConfig = ''
-        # SSL Configuration
-        ssl_protocols TLSv1.2 TLSv1.3;
-        ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
-        ssl_prefer_server_ciphers off;
-        ssl_session_cache shared:SSL:10m;
-        ssl_session_timeout 1d;
-        ssl_session_tickets off;
-        ssl_stapling on;
-        ssl_stapling_verify on;
-      '';
-      
-      virtualHosts."${config.cistern.ssl.domain}" = {
-        # HTTP to HTTPS redirect
-        forceSSL = true;
-        
-        # Certificate configuration
-        sslCertificate = mkIf config.cistern.ssl.selfSigned "/var/lib/cistern/ssl/certs/${config.cistern.ssl.domain}.crt";
-        sslCertificateKey = mkIf config.cistern.ssl.selfSigned "/var/lib/cistern/ssl/private/${config.cistern.ssl.domain}.key";
-        
-        # ACME certificate (overrides self-signed if enabled)
-        enableACME = config.cistern.ssl.acme.enable;
-        
-        # ACME challenge location
-        locations."/.well-known/acme-challenge" = mkIf config.cistern.ssl.acme.enable {
-          root = "/var/lib/acme/acme-challenge";
-        };
-      };
-    };
+    # Note: Nginx configuration is now handled by modules/nginx.nix to prevent conflicts
 
     # Certificate renewal service for self-signed certificates
     systemd.services.cistern-ssl-renewal = mkIf config.cistern.ssl.selfSigned {
