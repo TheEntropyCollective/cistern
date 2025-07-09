@@ -221,3 +221,5 @@ Each server includes:
 - **Workflow**
    - YOU MUST ALWAYS FOLLOW the standard workflow. 
    - Always keep todo.md clean. Just the current milestone, the sprints and tasks for that milestone and the completed milestone.
+- **General Guidelines**:
+   - dont create scripts unless they're really needed
