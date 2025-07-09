@@ -1,9 +1,10 @@
+# Disk configuration for /dev/vda (common for VMs)
 {
   disko.devices = {
     disk = {
       main = {
         type = "disk";
-        device = "/dev/vda"; # Common for VMs - change to /dev/sda for physical hardware
+        device = "/dev/vda";
         content = {
           type = "gpt";
           partitions = {

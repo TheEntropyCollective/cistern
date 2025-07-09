@@ -11,6 +11,14 @@ echo "Manual nixos-anywhere deployment to $TARGET_IP"
 echo "Make sure you can SSH manually first: ssh -i $SSH_KEY nixos@$TARGET_IP"
 echo ""
 
+# Check available disks on target system
+echo "Checking available disks on target system..."
+ssh -i "$SSH_KEY" nixos@$TARGET_IP "lsblk -d -n -o NAME,SIZE,TYPE | grep disk"
+echo ""
+echo "If the main disk is not /dev/sda, please edit disk-config.nix accordingly"
+echo "Press Enter to continue or Ctrl+C to cancel..."
+read -r
+
 # Check if SSH key exists
 if [[ ! -f "$SSH_KEY" ]]; then
     echo "Creating SSH key..."

@@ -1,9 +1,10 @@
+# Disk configuration for /dev/nvme0n1 (common for NVMe SSDs)
 {
   disko.devices = {
     disk = {
       main = {
         type = "disk";
-        device = "/dev/vda"; # Common for VMs - change to /dev/sda for physical hardware
+        device = "/dev/nvme0n1";
         content = {
           type = "gpt";
           partitions = {

@@ -25,6 +25,26 @@
     "disko": {
       "inputs": {
         "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1751854533,
+        "narHash": "sha256-U/OQFplExOR1jazZY4KkaQkJqOl59xlh21HP9mI79Vc=",
+        "owner": "nix-community",
+        "repo": "disko",
+        "rev": "16b74a1e304197248a1bc663280f2548dbfcae3c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "disko",
+        "type": "github"
+      }
+    },
+    "disko_2": {
+      "inputs": {
+        "nixpkgs": [
           "nixos-anywhere",
           "nixpkgs"
         ]
@@ -104,7 +124,7 @@
     },
     "nixos-anywhere": {
       "inputs": {
-        "disko": "disko",
+        "disko": "disko_2",
         "flake-parts": "flake-parts",
         "nix-vm-test": "nix-vm-test",
         "nixos-images": "nixos-images",
@@ -204,6 +224,7 @@
     "root": {
       "inputs": {
         "deploy-rs": "deploy-rs",
+        "disko": "disko",
         "nixos-anywhere": "nixos-anywhere",
         "nixpkgs": "nixpkgs",
         "nixpkgs-unstable": "nixpkgs-unstable"
