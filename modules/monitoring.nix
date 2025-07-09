@@ -23,9 +23,9 @@
     openFirewall = true;
   };
 
-  # Loki for log aggregation
+  # Loki for log aggregation - temporarily disabled due to configuration issues
   services.loki = {
-    enable = true;
+    enable = false;
     configuration = {
       server.http_listen_port = 3100;
       auth_enabled = false;
