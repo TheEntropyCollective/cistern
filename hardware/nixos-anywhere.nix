@@ -25,17 +25,13 @@
     loader = {
       grub = {
         enable = true;
-        device = "/dev/sda"; # Will be auto-detected by nixos-anywhere
+        device = "nodev"; # Let disko handle the device specification
       };
     };
   };
 
-  # File systems - minimal configuration for nixos-anywhere
-  # nixos-anywhere will override this with actual disk layout
-  fileSystems."/" = {
-    device = "/dev/disk/by-label/nixos";
-    fsType = "ext4";
-  };
+  # File systems - handled by disko configuration
+  # Don't define fileSystems here when using disko
   
   # Swap configuration - optional
   swapDevices = [ ];

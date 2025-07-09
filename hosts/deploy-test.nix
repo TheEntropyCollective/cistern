@@ -6,6 +6,7 @@
     ../modules/media-server.nix  
     ../modules/monitoring.nix
     ../hardware/nixos-anywhere.nix
+    ../disk-config.nix
   ];
 
   networking.hostName = "cistern-deploy-test";

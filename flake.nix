@@ -14,9 +14,14 @@
       url = "github:nix-community/nixos-anywhere";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    
+    disko = {
+      url = "github:nix-community/disko";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, deploy-rs, nixos-anywhere, ... }@inputs:
+  outputs = { self, nixpkgs, nixpkgs-unstable, deploy-rs, nixos-anywhere, disko, ... }@inputs:
     let
       supportedSystems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
       forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
@@ -30,6 +35,7 @@
         ./modules/privacy.nix
         ./modules/noisefs.nix
         ./modules/authentik.nix
+        disko.nixosModules.disko
       ];
     in
     {
