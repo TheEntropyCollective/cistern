@@ -213,15 +213,11 @@ Each server includes:
 10. Push the completed milestone to github
 11. Ask about completing the next sprint or milestone. Suggest additional ideas for other milestones.
 
-- **Workflow Guideline**: YOU MUST ALWAYS FOLLOW the standard workflow
-
-## Development Practices
-
-- **Workflow Management**: 
-  - Always keep todo.md clean. Just the current milestone, the sprints and tasks for that milestone and the completed milestone
-
 ## Memory Notes
 - you can use `nh darwin switch` instead
 - **Package Installation**: 
   - Install packages by adding them to the Nix flake, then run `nh darwin switch`
   - Prompt for password if needed during the switch process
+- **Workflow**
+   - YOU MUST ALWAYS FOLLOW the standard workflow. 
+   - Always keep todo.md clean. Just the current milestone, the sprints and tasks for that milestone and the completed milestone.

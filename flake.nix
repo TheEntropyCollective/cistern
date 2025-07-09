@@ -63,6 +63,16 @@
           ];
           specialArgs = { inherit inputs; };
         };
+
+        # nixos-anywhere deployment test
+        deploy-test = nixpkgs.lib.nixosSystem {
+          system = nixosSystem;
+          modules = commonModules ++ [
+            ./hardware/nixos-anywhere.nix
+            ./hosts/deploy-test.nix
+          ];
+          specialArgs = { inherit inputs; };
+        };
       };
 
       # Deploy-rs configuration for fleet management
