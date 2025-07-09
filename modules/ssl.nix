@@ -170,7 +170,7 @@ EOF
         add_header Strict-Transport-Security "max-age=63072000" always;
         add_header X-Frame-Options DENY always;
         add_header X-Content-Type-Options nosniff always;
-        add_header X-XSS-Protection "1; mode=block" always;
+        add_header X-XSS-Protection "1" always;
         add_header Referrer-Policy "no-referrer-when-downgrade" always;
         add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
       '';
