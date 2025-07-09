@@ -30,12 +30,13 @@
     };
   };
 
-  # File systems - nixos-anywhere will handle the partitioning
+  # File systems - minimal configuration for nixos-anywhere
+  # nixos-anywhere will override this with actual disk layout
   fileSystems."/" = {
-    device = "/dev/sda1";
+    device = "/dev/disk/by-label/nixos";
     fsType = "ext4";
   };
-
+  
   # Swap configuration - optional
   swapDevices = [ ];
 
