@@ -17,32 +17,37 @@ with lib;
       recommendedProxySettings = true;
       
       # Consolidated nginx configuration
-      appendConfig = ''
+      appendConfig = let
+        # Define security headers with proper quoting
+        securityHeaders = if config.cistern.ssl.enable then ''
+          add_header Strict-Transport-Security "max-age=63072000" always;
+          add_header X-Frame-Options "DENY" always;
+          add_header X-Content-Type-Options "nosniff" always;
+          add_header X-XSS-Protection "1" always;
+          add_header Referrer-Policy "no-referrer-when-downgrade" always;
+          add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
+        '' else "";
+        
+        sslConfig = if config.cistern.ssl.enable then ''
+          ssl_protocols TLSv1.2 TLSv1.3;
+          ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
+          ssl_prefer_server_ciphers off;
+          ssl_session_cache shared:SSL:10m;
+          ssl_session_timeout 1d;
+          ssl_session_tickets off;
+          ssl_stapling on;
+          ssl_stapling_verify on;
+        '' else "";
+      in ''
         # Rate limiting for authentication
         limit_req_zone $binary_remote_addr zone=auth:10m rate=5r/m;
         limit_req_zone $binary_remote_addr zone=api:10m rate=30r/m;
         
         # SSL Configuration (when SSL is enabled)
-        ${optionalString config.cistern.ssl.enable ''
-        ssl_protocols TLSv1.2 TLSv1.3;
-        ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
-        ssl_prefer_server_ciphers off;
-        ssl_session_cache shared:SSL:10m;
-        ssl_session_timeout 1d;
-        ssl_session_tickets off;
-        ssl_stapling on;
-        ssl_stapling_verify on;
-        ''}
+        ${sslConfig}
         
         # Security headers (when SSL is enabled)
-        ${optionalString config.cistern.ssl.enable ''
-        add_header Strict-Transport-Security "max-age=63072000" always;
-        add_header X-Frame-Options "DENY" always;
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header X-XSS-Protection "1" always;
-        add_header Referrer-Policy "no-referrer-when-downgrade" always;
-        add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
-        ''}
+        ${securityHeaders}
         
         # Define auth locations
         map $request_uri $auth_required {

@@ -23,7 +23,7 @@
 
   # Enable SSL for secure testing
   cistern.ssl = {
-    enable = false; # Temporarily disabled to debug nginx issues
+    enable = true;
     domain = "cistern-deploy-test.local";
     selfSigned = true;
   };
