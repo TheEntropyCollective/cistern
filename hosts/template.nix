@@ -1,6 +1,10 @@
 { config, pkgs, lib, ... }:
 
 {
+  imports = [
+    ../modules/ssh-deployment.nix
+  ];
+
   # Template host configuration for new media servers
   # Copy this file and customize for each specific server
   
@@ -204,6 +208,16 @@
   # - Access to global IPFS content and redundancy
   # - NoiseFS anonymization still protects file content
   # - Better performance from larger network
+
+  # SSH deployment configuration
+  cistern.ssh = {
+    enable = true;
+    enablePasswordAuth = true;
+    authorizedKeys = [
+      # Add your SSH public keys here for automatic deployment access
+      # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC... your-key@hostname"
+    ];
+  };
 
   # Additional packages for this server
   environment.systemPackages = with pkgs; [

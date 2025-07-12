@@ -170,11 +170,28 @@ For additional customization, use the configuration script:
 
 ## Adding New Servers
 
+### SSH Configuration
+Before provisioning servers, add your SSH public key to the host configuration:
+
+1. **Edit host config** (e.g., `hosts/template.nix` or specific server config)
+2. **Add SSH key** to `cistern.ssh.authorizedKeys`:
+   ```nix
+   cistern.ssh = {
+     enable = true;
+     enablePasswordAuth = true;
+     authorizedKeys = [
+       "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC... your-key@hostname"
+     ];
+   };
+   ```
+
+### Deployment Steps
 1. **Add to inventory**: `./scripts/inventory.sh add <server-name>`
 2. **Generate host config**: `./scripts/inventory.sh generate-hosts`
-3. **Update flake.nix**: Add server to nixosConfigurations and deploy.nodes
-4. **Provision**: `./scripts/provision.sh <ip> <hardware-type>`
-5. **Deploy**: `./scripts/deploy.sh <server-name>`
+3. **Configure SSH access**: Add your SSH key to the host configuration
+4. **Update flake.nix**: Add server to nixosConfigurations and deploy.nodes
+5. **Provision**: `./scripts/provision.sh <ip> <hardware-type>`
+6. **Deploy**: `./scripts/deploy.sh <server-name>`
 
 ## Testing Changes
 
