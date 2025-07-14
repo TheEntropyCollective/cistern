@@ -1,5 +1,24 @@
 { config, lib, pkgs, ... }:
 
+# SSH Deployment Module - Secure SSH Configuration for Cistern
+#
+# SECURITY CONSIDERATIONS:
+# 1. This module enforces secure SSH defaults:
+#    - Root login is only allowed with SSH keys (never passwords)
+#    - Password authentication is disabled by default
+#    - Strong authentication limits to prevent brute force
+#
+# 2. Password authentication should ONLY be enabled temporarily:
+#    - During initial server provisioning when SSH keys aren't yet deployed
+#    - Must be disabled immediately after SSH keys are configured
+#    - Never leave password authentication enabled in production
+#
+# 3. Best practices:
+#    - Always use SSH keys for authentication
+#    - Keep SSH keys secure and use passphrases
+#    - Regularly rotate SSH keys
+#    - Monitor auth logs for suspicious activity
+
 with lib;
 
 let
@@ -17,19 +36,32 @@ in
     
     enablePasswordAuth = mkOption {
       type = types.bool;
-      default = true;
-      description = "Enable password authentication for deployment";
+      default = false;  # Changed default to false for security
+      description = "Enable password authentication for deployment (NOT RECOMMENDED - use SSH keys instead)";
     };
   };
 
   config = mkIf cfg.enable {
-    # SSH service configuration
+    # SSH service configuration with security hardening
     services.openssh = {
       enable = true;
       settings = {
+        # CRITICAL SECURITY: Only enable password auth if explicitly requested
+        # This should only be used during initial deployment, then disabled
         PasswordAuthentication = mkIf cfg.enablePasswordAuth (mkForce true);
-        PermitRootLogin = mkForce "yes";
+        
+        # SECURITY: Never allow root login with password, only with SSH keys
+        # "prohibit-password" allows root to login with keys but never with password
+        PermitRootLogin = mkForce "prohibit-password";
+        
+        # Always enable public key authentication - this is the secure method
         PubkeyAuthentication = mkForce true;
+        
+        # Additional hardening when password auth is enabled
+        # These settings help mitigate brute force attacks
+        MaxAuthTries = mkDefault 3;
+        MaxSessions = mkDefault 10;
+        LoginGraceTime = mkDefault 60;  # 60 seconds to authenticate
       };
     };
 
@@ -62,6 +94,16 @@ in
       chmod 700 /home/nixos/.ssh
       chown nixos:users /home/nixos/.ssh
     '';
+    
+    # Security warning when password authentication is enabled
+    warnings = mkIf cfg.enablePasswordAuth [
+      ''
+        WARNING: SSH password authentication is enabled!
+        This is a security risk and should only be used temporarily during initial deployment.
+        Please disable password authentication and use SSH keys instead by setting:
+        cistern.ssh.enablePasswordAuth = false;
+      ''
+    ];
 
     # Enable sudo without password for deployment user
     security.sudo.wheelNeedsPassword = false;

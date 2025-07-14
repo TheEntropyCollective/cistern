@@ -212,7 +212,9 @@
   # SSH deployment configuration
   cistern.ssh = {
     enable = true;
-    enablePasswordAuth = true;
+    # SECURITY WARNING: Password authentication should only be enabled during initial deployment
+    # After adding SSH keys, set this to false for security
+    enablePasswordAuth = false;  # Changed to false for security - use SSH keys only
     authorizedKeys = [
       # Add your SSH public keys here for automatic deployment access
       "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCjZ2yKqEb+s4gz8It2vSNNnnZI
