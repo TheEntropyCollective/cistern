@@ -6,6 +6,128 @@ with lib;
   # Centralized nginx configuration for Cistern
   # Consolidates all nginx config to prevent module conflicts
 
+  options.cistern.nginx = {
+    securityHeaders = {
+      enable = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Enable security headers in nginx responses";
+      };
+      
+      hsts = {
+        enable = mkOption {
+          type = types.bool;
+          default = true;
+          description = "Enable HTTP Strict Transport Security (HSTS)";
+        };
+        maxAge = mkOption {
+          type = types.int;
+          default = 63072000; # 2 years
+          description = "HSTS max-age in seconds";
+        };
+        includeSubdomains = mkOption {
+          type = types.bool;
+          default = true;
+          description = "Include subdomains in HSTS policy";
+        };
+        preload = mkOption {
+          type = types.bool;
+          default = false;
+          description = "Enable HSTS preloading";
+        };
+      };
+      
+      frameOptions = mkOption {
+        type = types.enum [ "DENY" "SAMEORIGIN" "ALLOW-FROM" ];
+        default = "SAMEORIGIN";
+        description = "X-Frame-Options header value";
+      };
+      
+      contentTypeOptions = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Enable X-Content-Type-Options: nosniff";
+      };
+      
+      xssProtection = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Enable X-XSS-Protection header";
+      };
+      
+      referrerPolicy = mkOption {
+        type = types.enum [ 
+          "no-referrer" 
+          "no-referrer-when-downgrade" 
+          "same-origin" 
+          "origin" 
+          "strict-origin" 
+          "origin-when-cross-origin" 
+          "strict-origin-when-cross-origin" 
+          "unsafe-url" 
+        ];
+        default = "strict-origin-when-cross-origin";
+        description = "Referrer-Policy header value";
+      };
+      
+      contentSecurityPolicy = mkOption {
+        type = types.str;
+        default = "default-src 'self' http: https: ws: wss: data: blob: 'unsafe-inline' 'unsafe-eval'; frame-ancestors 'self';";
+        description = "Content-Security-Policy header value";
+      };
+      
+      permissionsPolicy = mkOption {
+        type = types.str;
+        default = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()";
+        description = "Permissions-Policy header value";
+      };
+    };
+    
+    cors = {
+      enable = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Enable CORS headers";
+      };
+      
+      allowedOrigins = mkOption {
+        type = types.listOf types.str;
+        default = [ "*" ];
+        description = "List of allowed origins for CORS";
+      };
+      
+      allowedMethods = mkOption {
+        type = types.listOf types.str;
+        default = [ "GET" "POST" "PUT" "DELETE" "OPTIONS" ];
+        description = "List of allowed HTTP methods for CORS";
+      };
+      
+      allowedHeaders = mkOption {
+        type = types.listOf types.str;
+        default = [ "Authorization" "Content-Type" "X-Requested-With" ];
+        description = "List of allowed headers for CORS";
+      };
+      
+      exposeHeaders = mkOption {
+        type = types.listOf types.str;
+        default = [];
+        description = "List of headers to expose to the client";
+      };
+      
+      maxAge = mkOption {
+        type = types.int;
+        default = 86400;
+        description = "Max age for CORS preflight cache in seconds";
+      };
+      
+      allowCredentials = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Allow credentials in CORS requests";
+      };
+    };
+  };
+
   config = mkIf config.cistern.auth.enable {
     
     # Enhanced nginx configuration
@@ -84,6 +206,49 @@ with lib;
       '';
       
       virtualHosts = let
+        # Helper function to generate security headers
+        securityHeadersConfig = let
+          cfg = config.cistern.nginx;
+          # Build HSTS header
+          hstsHeader = if cfg.securityHeaders.enable && cfg.securityHeaders.hsts.enable then
+            let
+              hstsValue = "max-age=${toString cfg.securityHeaders.hsts.maxAge}" +
+                optionalString cfg.securityHeaders.hsts.includeSubdomains "; includeSubDomains" +
+                optionalString cfg.securityHeaders.hsts.preload "; preload";
+            in
+              ''add_header Strict-Transport-Security "${hstsValue}" always;''
+          else "";
+          
+          # Build other security headers
+          otherHeaders = if cfg.securityHeaders.enable then ''
+            ${optionalString cfg.securityHeaders.contentTypeOptions ''add_header X-Content-Type-Options "nosniff" always;''}
+            ${optionalString cfg.securityHeaders.xssProtection ''add_header X-XSS-Protection "1; mode=block" always;''}
+            add_header X-Frame-Options "${cfg.securityHeaders.frameOptions}" always;
+            add_header Referrer-Policy "${cfg.securityHeaders.referrerPolicy}" always;
+            add_header Content-Security-Policy "${cfg.securityHeaders.contentSecurityPolicy}" always;
+            add_header Permissions-Policy "${cfg.securityHeaders.permissionsPolicy}" always;
+          '' else "";
+          
+          # Build CORS headers
+          corsHeaders = if cfg.cors.enable then ''
+            add_header Access-Control-Allow-Origin "${if length cfg.cors.allowedOrigins == 1 then head cfg.cors.allowedOrigins else "$http_origin"}" always;
+            add_header Access-Control-Allow-Methods "${concatStringsSep ", " cfg.cors.allowedMethods}" always;
+            add_header Access-Control-Allow-Headers "${concatStringsSep ", " cfg.cors.allowedHeaders}" always;
+            ${optionalString (cfg.cors.exposeHeaders != []) ''add_header Access-Control-Expose-Headers "${concatStringsSep ", " cfg.cors.exposeHeaders}" always;''}
+            add_header Access-Control-Max-Age "${toString cfg.cors.maxAge}" always;
+            ${optionalString cfg.cors.allowCredentials ''add_header Access-Control-Allow-Credentials "true" always;''}
+          '' else "";
+        in ''
+          # Security headers (works for both HTTP and HTTPS)
+          ${otherHeaders}
+          
+          # HSTS header (only for HTTPS)
+          ${optionalString config.cistern.ssl.enable hstsHeader}
+          
+          # CORS headers
+          ${corsHeaders}
+        '';
+        
         # Helper function to generate auth configuration
         authConfig = service: 
           if config.cistern.auth.method == "authentik" then ''
@@ -126,15 +291,19 @@ with lib;
           sslCertificateKey = mkIf (config.cistern.ssl.enable && config.cistern.ssl.selfSigned) "/var/lib/cistern/ssl/private/${config.cistern.ssl.domain}.key";
           enableACME = mkIf config.cistern.ssl.enable config.cistern.ssl.acme.enable;
           
-          # Security headers temporarily disabled to resolve nginx config validation issues
-          # extraConfig = mkIf config.cistern.ssl.enable ''
-          #   add_header Strict-Transport-Security "max-age=63072000" always;
-          #   add_header X-Frame-Options "DENY" always;
-          #   add_header X-Content-Type-Options "nosniff" always;
-          #   add_header X-XSS-Protection "1" always;
-          #   add_header Referrer-Policy "no-referrer-when-downgrade" always;
-          #   add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
-          # '';
+          # Apply security headers to the entire virtual host
+          extraConfig = ''
+            ${securityHeadersConfig}
+            
+            # Handle CORS preflight requests
+            ${optionalString config.cistern.nginx.cors.enable ''
+              if ($request_method = 'OPTIONS') {
+                add_header Content-Length 0;
+                add_header Content-Type text/plain;
+                return 204;
+              }
+            ''}
+          '';
           
           locations = {
             # Authentication endpoint
@@ -154,7 +323,14 @@ with lib;
               '';
             };
             
-            # Dashboard with auth
+            # Dashboard with auth (as default root)
+            "/" = {
+              proxyPass = "http://127.0.0.1:8081";
+              proxyWebsockets = true;
+              extraConfig = authConfig "dashboard";
+            };
+            
+            # Dashboard also accessible at /dashboard
             "/dashboard" = {
               proxyPass = "http://127.0.0.1:8081";
               proxyWebsockets = true;
@@ -162,7 +338,7 @@ with lib;
             };
             
             # Jellyfin with auth
-            "/" = {
+            "/jellyfin" = {
               proxyPass = "http://127.0.0.1:8096";
               proxyWebsockets = true;
               extraConfig = ''
