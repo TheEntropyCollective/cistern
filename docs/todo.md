@@ -25,12 +25,12 @@ Using agenix for NixOS secrets management to provide:
 - [x] Add secret encryption/decryption helpers
 - [x] Create migration detection system
 
-### Sprint 2: API Key Management
-- [ ] Update auto-config.nix to use agenix secrets
-- [ ] Implement encrypted API key storage
-- [ ] Add runtime secret injection for services
-- [ ] Create API key rotation utilities
-- [ ] Maintain backwards compatibility mode
+### Sprint 2: API Key Management ✓
+- [x] Update auto-config.nix to use agenix secrets
+- [x] Implement encrypted API key storage
+- [x] Add runtime secret injection for services
+- [x] Create API key rotation utilities
+- [x] Maintain backwards compatibility mode
 
 ### Sprint 3: Authentication Secrets
 - [ ] Update auth.nix to use encrypted passwords

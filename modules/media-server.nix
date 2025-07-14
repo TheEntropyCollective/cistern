@@ -224,6 +224,8 @@ EOF
   services.prowlarr = {
     enable = true;
     openFirewall = true;
+    user = "media";
+    group = "media";
   };
 
   # Bazarr for subtitle management

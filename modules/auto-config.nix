@@ -22,7 +22,17 @@
   # Auto-configuration script that runs after services start
   systemd.services.media-auto-config = {
     description = "Auto-configure media services";
-    after = [ "network.target" "jellyfin.service" "sonarr.service" "radarr.service" "prowlarr.service" "sabnzbd.service" "transmission.service" "bazarr.service" ];
+    after = [ 
+      "network.target" 
+      "jellyfin.service" 
+      "sonarr.service" 
+      "radarr.service" 
+      "prowlarr.service" 
+      "sabnzbd.service" 
+      "transmission.service" 
+      "bazarr.service"
+      "agenix.service"  # Ensure secrets are decrypted first
+    ];
     wantedBy = [ "multi-user.target" ];
     
     serviceConfig = {
@@ -216,48 +226,53 @@
         }" \
         http://127.0.0.1:9091/transmission/rpc >> "$LOG_FILE" 2>&1 || true
       
-      # Configure Bazarr
-      echo "$(date): Configuring Bazarr" >> "$LOG_FILE"
-      ${pkgs.curl}/bin/curl -s -X POST \
-        -H "Content-Type: application/json" \
-        -d '{
-          "settings": {
-            "general": {
-              "movie_default_enabled": true,
-              "series_default_enabled": true,
-              "movie_default_profile": 1,
-              "series_default_profile": 1
-            },
-            "sonarr": {
-              "ip": "127.0.0.1",
-              "port": 8989,
-              "base_url": "",
-              "ssl": false,
-              "apikey": "auto-generated"
-            },
-            "radarr": {
-              "ip": "127.0.0.1", 
-              "port": 7878,
-              "base_url": "",
-              "ssl": false,
-              "apikey": "auto-generated"
-            }
-          }
-        }' \
-        http://127.0.0.1:6767/api/system/settings >> "$LOG_FILE" 2>&1 || true
+      # Configure Bazarr (will be done after API keys are set)
+      echo "$(date): Bazarr configuration will use API keys from Sonarr/Radarr" >> "$LOG_FILE"
       
       # Configure Prowlarr with basic indexers and applications
       echo "$(date): Configuring Prowlarr" >> "$LOG_FILE"
       
-      # Generate API keys for cross-service communication
-      SONARR_API_KEY=$(${pkgs.openssl}/bin/openssl rand -hex 16)
-      RADARR_API_KEY=$(${pkgs.openssl}/bin/openssl rand -hex 16)
-      PROWLARR_API_KEY=$(${pkgs.openssl}/bin/openssl rand -hex 16)
+      # Get or generate API keys for cross-service communication
+      # Check for agenix secrets first, generate if not found
       
-      # Store API keys for later use
-      echo "$SONARR_API_KEY" > /var/lib/media/auto-config/sonarr-api-key
-      echo "$RADARR_API_KEY" > /var/lib/media/auto-config/radarr-api-key
-      echo "$PROWLARR_API_KEY" > /var/lib/media/auto-config/prowlarr-api-key
+      # Sonarr API key
+      if [ -f "/run/agenix/sonarr-api-key" ]; then
+        SONARR_API_KEY=$(cat "/run/agenix/sonarr-api-key")
+        echo "$(date): Using agenix-encrypted Sonarr API key" >> "$LOG_FILE"
+      elif [ -f "/var/lib/media/auto-config/sonarr-api-key" ]; then
+        SONARR_API_KEY=$(cat "/var/lib/media/auto-config/sonarr-api-key")
+        echo "$(date): Using existing plain text Sonarr API key (migration pending)" >> "$LOG_FILE"
+      else
+        SONARR_API_KEY=$(${pkgs.openssl}/bin/openssl rand -hex 16)
+        echo "$SONARR_API_KEY" > /var/lib/media/auto-config/sonarr-api-key
+        echo "$(date): Generated new Sonarr API key" >> "$LOG_FILE"
+      fi
+      
+      # Radarr API key
+      if [ -f "/run/agenix/radarr-api-key" ]; then
+        RADARR_API_KEY=$(cat "/run/agenix/radarr-api-key")
+        echo "$(date): Using agenix-encrypted Radarr API key" >> "$LOG_FILE"
+      elif [ -f "/var/lib/media/auto-config/radarr-api-key" ]; then
+        RADARR_API_KEY=$(cat "/var/lib/media/auto-config/radarr-api-key")
+        echo "$(date): Using existing plain text Radarr API key (migration pending)" >> "$LOG_FILE"
+      else
+        RADARR_API_KEY=$(${pkgs.openssl}/bin/openssl rand -hex 16)
+        echo "$RADARR_API_KEY" > /var/lib/media/auto-config/radarr-api-key
+        echo "$(date): Generated new Radarr API key" >> "$LOG_FILE"
+      fi
+      
+      # Prowlarr API key
+      if [ -f "/run/agenix/prowlarr-api-key" ]; then
+        PROWLARR_API_KEY=$(cat "/run/agenix/prowlarr-api-key")
+        echo "$(date): Using agenix-encrypted Prowlarr API key" >> "$LOG_FILE"
+      elif [ -f "/var/lib/media/auto-config/prowlarr-api-key" ]; then
+        PROWLARR_API_KEY=$(cat "/var/lib/media/auto-config/prowlarr-api-key")
+        echo "$(date): Using existing plain text Prowlarr API key (migration pending)" >> "$LOG_FILE"
+      else
+        PROWLARR_API_KEY=$(${pkgs.openssl}/bin/openssl rand -hex 16)
+        echo "$PROWLARR_API_KEY" > /var/lib/media/auto-config/prowlarr-api-key
+        echo "$(date): Generated new Prowlarr API key" >> "$LOG_FILE"
+      fi
       
       # Add Sonarr application to Prowlarr
       ${pkgs.curl}/bin/curl -s -X POST \
@@ -315,6 +330,36 @@
           "enable": true
         }' \
         http://127.0.0.1:9696/api/v1/indexer >> "$LOG_FILE" 2>&1 || true
+      
+      # Configure Bazarr with actual API keys
+      echo "$(date): Configuring Bazarr with API keys" >> "$LOG_FILE"
+      ${pkgs.curl}/bin/curl -s -X POST \
+        -H "Content-Type: application/json" \
+        -d "{
+          \"settings\": {
+            \"general\": {
+              \"movie_default_enabled\": true,
+              \"series_default_enabled\": true,
+              \"movie_default_profile\": 1,
+              \"series_default_profile\": 1
+            },
+            \"sonarr\": {
+              \"ip\": \"127.0.0.1\",
+              \"port\": 8989,
+              \"base_url\": \"\",
+              \"ssl\": false,
+              \"apikey\": \"$SONARR_API_KEY\"
+            },
+            \"radarr\": {
+              \"ip\": \"127.0.0.1\", 
+              \"port\": 7878,
+              \"base_url\": \"\",
+              \"ssl\": false,
+              \"apikey\": \"$RADARR_API_KEY\"
+            }
+          }
+        }" \
+        http://127.0.0.1:6767/api/system/settings >> "$LOG_FILE" 2>&1 || true
       
       echo "$(date): Auto-configuration completed" >> "$LOG_FILE"
       
@@ -424,5 +469,51 @@ EOF
       # Additional API configuration can go here
       echo "API configuration completed" > /var/lib/media/auto-config/api-completed
     '';
+  };
+
+  # Configure agenix secrets for media services
+  config.cistern.secrets.secrets = lib.mkIf config.cistern.secrets.enable {
+    "sonarr-api-key" = {
+      file = ../secrets/sonarr-api-key.age;
+      owner = "media";
+      group = "media";
+      mode = "0440";
+    };
+    "radarr-api-key" = {
+      file = ../secrets/radarr-api-key.age;
+      owner = "media";
+      group = "media";
+      mode = "0440";
+    };
+    "prowlarr-api-key" = {
+      file = ../secrets/prowlarr-api-key.age;
+      owner = "media";
+      group = "media";
+      mode = "0440";
+    };
+    "bazarr-api-key" = {
+      file = ../secrets/bazarr-api-key.age;
+      owner = "media";
+      group = "media";
+      mode = "0440";
+    };
+    "jellyfin-api-key" = {
+      file = ../secrets/jellyfin-api-key.age;
+      owner = "media";
+      group = "media";
+      mode = "0440";
+    };
+    "sabnzbd-api-key" = {
+      file = ../secrets/sabnzbd-api-key.age;
+      owner = "media";
+      group = "media";
+      mode = "0440";
+    };
+    "transmission-rpc-password" = {
+      file = ../secrets/transmission-rpc-password.age;
+      owner = "media";
+      group = "media";
+      mode = "0440";
+    };
   };
 }
