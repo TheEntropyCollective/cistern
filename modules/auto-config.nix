@@ -240,10 +240,22 @@
         SONARR_API_KEY=$(cat "/run/agenix/sonarr-api-key")
         echo "$(date): Using agenix-encrypted Sonarr API key" >> "$LOG_FILE"
       elif [ -f "/var/lib/media/auto-config/sonarr-api-key" ]; then
+        ${lib.optionalString (!config.cistern.secrets.allowPlainText) ''
+          echo "$(date): ERROR: Plain text secret found but allowPlainText=false. Cannot use plain text Sonarr API key!" >> "$LOG_FILE"
+          echo "$(date): ERROR: Please migrate secrets to agenix before disabling plain text fallback" >> "$LOG_FILE"
+          exit 1
+        ''}
         SONARR_API_KEY=$(cat "/var/lib/media/auto-config/sonarr-api-key")
         echo "$(date): Using existing plain text Sonarr API key (migration pending)" >> "$LOG_FILE"
+        ${lib.optionalString config.cistern.secrets.enableSecurityWarnings ''
+          echo "$(date): SECURITY WARNING: Using plain text secret for Sonarr API key" | wall
+        ''}
       else
         SONARR_API_KEY=$(${pkgs.openssl}/bin/openssl rand -hex 16)
+        ${lib.optionalString (!config.cistern.secrets.allowPlainText) ''
+          echo "$(date): ERROR: No encrypted secret found and plain text generation disabled!" >> "$LOG_FILE"
+          exit 1
+        ''}
         echo "$SONARR_API_KEY" > /var/lib/media/auto-config/sonarr-api-key
         echo "$(date): Generated new Sonarr API key" >> "$LOG_FILE"
       fi
@@ -253,10 +265,21 @@
         RADARR_API_KEY=$(cat "/run/agenix/radarr-api-key")
         echo "$(date): Using agenix-encrypted Radarr API key" >> "$LOG_FILE"
       elif [ -f "/var/lib/media/auto-config/radarr-api-key" ]; then
+        ${lib.optionalString (!config.cistern.secrets.allowPlainText) ''
+          echo "$(date): ERROR: Plain text secret found but allowPlainText=false. Cannot use plain text Radarr API key!" >> "$LOG_FILE"
+          exit 1
+        ''}
         RADARR_API_KEY=$(cat "/var/lib/media/auto-config/radarr-api-key")
         echo "$(date): Using existing plain text Radarr API key (migration pending)" >> "$LOG_FILE"
+        ${lib.optionalString config.cistern.secrets.enableSecurityWarnings ''
+          echo "$(date): SECURITY WARNING: Using plain text secret for Radarr API key" | wall
+        ''}
       else
         RADARR_API_KEY=$(${pkgs.openssl}/bin/openssl rand -hex 16)
+        ${lib.optionalString (!config.cistern.secrets.allowPlainText) ''
+          echo "$(date): ERROR: No encrypted secret found and plain text generation disabled!" >> "$LOG_FILE"
+          exit 1
+        ''}
         echo "$RADARR_API_KEY" > /var/lib/media/auto-config/radarr-api-key
         echo "$(date): Generated new Radarr API key" >> "$LOG_FILE"
       fi
@@ -266,10 +289,21 @@
         PROWLARR_API_KEY=$(cat "/run/agenix/prowlarr-api-key")
         echo "$(date): Using agenix-encrypted Prowlarr API key" >> "$LOG_FILE"
       elif [ -f "/var/lib/media/auto-config/prowlarr-api-key" ]; then
+        ${lib.optionalString (!config.cistern.secrets.allowPlainText) ''
+          echo "$(date): ERROR: Plain text secret found but allowPlainText=false. Cannot use plain text Prowlarr API key!" >> "$LOG_FILE"
+          exit 1
+        ''}
         PROWLARR_API_KEY=$(cat "/var/lib/media/auto-config/prowlarr-api-key")
         echo "$(date): Using existing plain text Prowlarr API key (migration pending)" >> "$LOG_FILE"
+        ${lib.optionalString config.cistern.secrets.enableSecurityWarnings ''
+          echo "$(date): SECURITY WARNING: Using plain text secret for Prowlarr API key" | wall
+        ''}
       else
         PROWLARR_API_KEY=$(${pkgs.openssl}/bin/openssl rand -hex 16)
+        ${lib.optionalString (!config.cistern.secrets.allowPlainText) ''
+          echo "$(date): ERROR: No encrypted secret found and plain text generation disabled!" >> "$LOG_FILE"
+          exit 1
+        ''}
         echo "$PROWLARR_API_KEY" > /var/lib/media/auto-config/prowlarr-api-key
         echo "$(date): Generated new Prowlarr API key" >> "$LOG_FILE"
       fi

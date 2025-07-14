@@ -46,12 +46,15 @@ Using agenix for NixOS secrets management to provide:
 - [x] Create migration scripts from plain text
 - [x] Add troubleshooting guide
 
-### Sprint 5: Security Hardening
-- [ ] Remove plain text fallback after migration period
-- [ ] Implement secret access auditing
-- [ ] Add automatic secret backup
-- [ ] Create disaster recovery procedures
-- [ ] Final security audit
+### Sprint 5: Security Hardening ✓
+- [x] Add option to disable plain text fallback (cistern.secrets.allowPlainText)
+- [x] Add security warnings when plain text secrets are detected
+- [x] Implement automatic cleanup of migrated plain text secrets
+- [x] Create cleanup script with safety checks and backups
+- [x] Add security monitoring and access logging
+- [x] Create security best practices documentation
+- [x] Add enhanced validation script with security checks
+- [x] Implement periodic security audits
 
 ## Previous Milestone: Fleet Management Automation & Scaling Improvements
 

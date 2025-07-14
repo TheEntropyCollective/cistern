@@ -103,11 +103,24 @@ with lib;
             echo "Using agenix-encrypted admin password"
           # Check for existing plain text password (migration mode)
           elif [ -f "/var/lib/cistern/auth/admin-password.txt" ]; then
+            ${lib.optionalString (config.cistern.secrets.enable && !config.cistern.secrets.allowPlainText) ''
+              echo "ERROR: Plain text admin password found but allowPlainText=false!"
+              echo "ERROR: Please migrate admin password to agenix before disabling plain text fallback"
+              exit 1
+            ''}
             DEFAULT_PASSWORD=$(cat "/var/lib/cistern/auth/admin-password.txt")
             echo "Using existing plain text admin password (migration pending)"
+            ${lib.optionalString (config.cistern.secrets.enable && config.cistern.secrets.enableSecurityWarnings) ''
+              echo "SECURITY WARNING: Using plain text admin password" | wall
+            ''}
           else
             # Generate new password
             DEFAULT_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -base64 16)
+            
+            ${lib.optionalString (config.cistern.secrets.enable && !config.cistern.secrets.allowPlainText) ''
+              echo "ERROR: No encrypted admin password found and plain text generation disabled!"
+              exit 1
+            ''}
             
             # Save password in plain text (for migration compatibility)
             PASSWORD_FILE="/var/lib/cistern/auth/admin-password.txt"
@@ -115,6 +128,9 @@ with lib;
             chmod 600 "$PASSWORD_FILE"
             chown root:root "$PASSWORD_FILE"
             echo "Generated new admin password (plain text - needs migration to agenix)"
+            ${lib.optionalString (config.cistern.secrets.enable && config.cistern.secrets.enableSecurityWarnings) ''
+              echo "SECURITY WARNING: Generated plain text admin password - migrate to agenix ASAP" | wall
+            ''}
           fi
           
           # Create bcrypt hash with cost factor 10 (htpasswd -B uses bcrypt)

@@ -63,6 +63,30 @@ in
       description = "Enable migration mode to fall back to plain text secrets if encrypted ones don't exist";
     };
 
+    allowPlainText = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Allow plain text secrets as fallback. Set to false to enforce encrypted secrets only";
+    };
+
+    enableSecurityWarnings = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Enable security warnings for plain text secrets";
+    };
+
+    enableAccessLogging = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Enable logging of secret access patterns";
+    };
+
+    autoCleanupPlainText = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Automatically remove plain text secrets after successful migration (requires explicit enable)";
+    };
+
     plainTextPaths = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
       default = {
@@ -286,5 +310,359 @@ in
         echo "Secrets initialization complete"
       '';
     };
+
+    # Security monitoring service
+    systemd.services.cistern-secrets-monitor = lib.mkIf cfg.enableAccessLogging {
+      description = "Monitor secret access patterns";
+      after = [ "agenix.service" ];
+      wantedBy = [ "multi-user.target" ];
+      
+      serviceConfig = {
+        Type = "oneshot";
+        User = "root";
+      };
+      
+      script = ''
+        LOG_FILE="/var/log/cistern/secrets-access.log"
+        SECURITY_LOG="/var/log/cistern/secrets-security.log"
+        
+        mkdir -p $(dirname "$LOG_FILE")
+        
+        # Log current secret status
+        echo "[$(date)] Secret access monitoring started" >> "$LOG_FILE"
+        
+        # Check for plain text secrets and log warnings
+        ${lib.optionalString cfg.enableSecurityWarnings ''
+          PLAIN_TEXT_FOUND=0
+          ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: path: ''
+            if [ -f "${path}" ]; then
+              echo "[$(date)] WARNING: Plain text secret found: ${name} at ${path}" >> "$SECURITY_LOG"
+              PLAIN_TEXT_FOUND=$((PLAIN_TEXT_FOUND + 1))
+              
+              # Check file permissions
+              PERMS=$(stat -c %a "${path}" 2>/dev/null || echo "unknown")
+              if [ "$PERMS" != "600" ] && [ "$PERMS" != "400" ]; then
+                echo "[$(date)] CRITICAL: Insecure permissions on ${path}: $PERMS" >> "$SECURITY_LOG"
+              fi
+            fi
+          '') cfg.plainTextPaths)}
+          
+          if [ $PLAIN_TEXT_FOUND -gt 0 ]; then
+            echo "[$(date)] SECURITY WARNING: $PLAIN_TEXT_FOUND plain text secrets detected!" | wall
+            
+            ${lib.optionalString (!cfg.allowPlainText) ''
+              echo "[$(date)] CRITICAL: Plain text secrets found but allowPlainText=false. Services may fail!" >> "$SECURITY_LOG"
+            ''}
+          fi
+        ''}
+        
+        # Check for missing encrypted secrets
+        ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: secret: ''
+          if [ ! -f "${secret.file}" ] && [ ! -f "/run/agenix/${name}" ]; then
+            echo "[$(date)] WARNING: Missing encrypted secret: ${name}" >> "$SECURITY_LOG"
+          fi
+        '') cfg.secrets)}
+        
+        # Monitor secret file access (using inotify if available)
+        if command -v inotifywait >/dev/null 2>&1; then
+          echo "[$(date)] Starting inotify monitoring for secret access" >> "$LOG_FILE"
+          
+          # Monitor agenix runtime secrets
+          for secret in /run/agenix/*; do
+            if [ -f "$secret" ]; then
+              inotifywait -m -e access --format '%T %f accessed' --timefmt '%Y-%m-%d %H:%M:%S' "$secret" >> "$LOG_FILE" 2>&1 &
+            fi
+          done
+          
+          # Monitor plain text secrets if they exist
+          ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: path: ''
+            if [ -f "${path}" ]; then
+              inotifywait -m -e access --format '%T ${name} (PLAIN TEXT) accessed from ${path}' --timefmt '%Y-%m-%d %H:%M:%S' "${path}" >> "$LOG_FILE" 2>&1 &
+            fi
+          '') cfg.plainTextPaths)}
+        fi
+      '';
+    };
+
+    # Periodic security audit timer
+    systemd.timers.cistern-secrets-audit = lib.mkIf cfg.enableSecurityWarnings {
+      description = "Periodic secrets security audit";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnCalendar = "daily";
+        Persistent = true;
+      };
+    };
+
+    systemd.services.cistern-secrets-audit = lib.mkIf cfg.enableSecurityWarnings {
+      description = "Audit secret security status";
+      serviceConfig = {
+        Type = "oneshot";
+        User = "root";
+      };
+      
+      script = ''
+        AUDIT_LOG="/var/log/cistern/secrets-audit.log"
+        mkdir -p $(dirname "$AUDIT_LOG")
+        
+        echo "=== Cistern Secrets Security Audit - $(date) ===" >> "$AUDIT_LOG"
+        
+        # Count plain text vs encrypted secrets
+        PLAIN_COUNT=0
+        ENCRYPTED_COUNT=0
+        MISSING_COUNT=0
+        INSECURE_COUNT=0
+        
+        ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: path: ''
+          if [ -f "${path}" ]; then
+            PLAIN_COUNT=$((PLAIN_COUNT + 1))
+            
+            # Check permissions
+            PERMS=$(stat -c %a "${path}" 2>/dev/null || echo "unknown")
+            OWNER=$(stat -c %U "${path}" 2>/dev/null || echo "unknown")
+            if [ "$PERMS" != "600" ] && [ "$PERMS" != "400" ]; then
+              INSECURE_COUNT=$((INSECURE_COUNT + 1))
+              echo "  INSECURE: ${name} has permissions $PERMS (owner: $OWNER)" >> "$AUDIT_LOG"
+            fi
+            
+            # Check for world-readable
+            if [ "$PERMS" = "644" ] || [ "$PERMS" = "666" ]; then
+              echo "  CRITICAL: ${name} is world-readable!" >> "$AUDIT_LOG"
+            fi
+          elif [ -f "/run/agenix/${name}" ]; then
+            ENCRYPTED_COUNT=$((ENCRYPTED_COUNT + 1))
+          else
+            MISSING_COUNT=$((MISSING_COUNT + 1))
+          fi
+        '') cfg.plainTextPaths)}
+        
+        echo "Summary:" >> "$AUDIT_LOG"
+        echo "  Encrypted secrets: $ENCRYPTED_COUNT" >> "$AUDIT_LOG"
+        echo "  Plain text secrets: $PLAIN_COUNT" >> "$AUDIT_LOG"
+        echo "  Missing secrets: $MISSING_COUNT" >> "$AUDIT_LOG"
+        echo "  Insecure permissions: $INSECURE_COUNT" >> "$AUDIT_LOG"
+        
+        # Check for secrets in environment variables (common security issue)
+        echo "" >> "$AUDIT_LOG"
+        echo "Checking for secrets in environment..." >> "$AUDIT_LOG"
+        
+        # Look for common secret patterns in environment
+        env | grep -iE '(password|secret|key|token|api)' | grep -vE '(PATH|PUBLIC|LESS)' | while read -r line; do
+          VAR_NAME=$(echo "$line" | cut -d= -f1)
+          echo "  WARNING: Potential secret in environment: $VAR_NAME" >> "$AUDIT_LOG"
+        done
+        
+        # Generate recommendations
+        echo "" >> "$AUDIT_LOG"
+        echo "Recommendations:" >> "$AUDIT_LOG"
+        
+        if [ $PLAIN_COUNT -gt 0 ]; then
+          echo "  - Migrate $PLAIN_COUNT plain text secrets to agenix encryption" >> "$AUDIT_LOG"
+          echo "  - Run: sudo cistern-secrets-migrate-all" >> "$AUDIT_LOG"
+        fi
+        
+        if [ $INSECURE_COUNT -gt 0 ]; then
+          echo "  - Fix permissions on $INSECURE_COUNT secrets" >> "$AUDIT_LOG"
+          echo "  - Run: sudo chmod 600 /var/lib/*/auth/*.txt" >> "$AUDIT_LOG"
+        fi
+        
+        if [ $MISSING_COUNT -gt 0 ]; then
+          echo "  - Generate $MISSING_COUNT missing secrets" >> "$AUDIT_LOG"
+        fi
+        
+        echo "=== End of audit ===" >> "$AUDIT_LOG"
+        
+        # Alert if critical issues found
+        if [ $INSECURE_COUNT -gt 0 ] || [ $PLAIN_COUNT -gt 0 ]; then
+          echo "[$(date)] SECURITY AUDIT: Found $PLAIN_COUNT plain text and $INSECURE_COUNT insecure secrets" | wall
+        fi
+      '';
+    };
+
+    # Automatic plain text cleanup service
+    systemd.services.cistern-secrets-cleanup = lib.mkIf cfg.autoCleanupPlainText {
+      description = "Automatically cleanup plain text secrets after migration";
+      after = [ "agenix.service" "cistern-secrets-init.service" ];
+      wantedBy = [ "multi-user.target" ];
+      
+      serviceConfig = {
+        Type = "oneshot";
+        User = "root";
+        RemainAfterExit = true;
+      };
+      
+      script = ''
+        CLEANUP_LOG="/var/log/cistern/auto-cleanup.log"
+        mkdir -p $(dirname "$CLEANUP_LOG")
+        
+        echo "[$(date)] Starting automatic plain text secrets cleanup" >> "$CLEANUP_LOG"
+        
+        # Check if all secrets are migrated
+        ALL_MIGRATED=true
+        
+        ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: path: ''
+          if [ -f "${path}" ] && [ ! -f "/run/agenix/${name}" ]; then
+            echo "[$(date)] Cannot cleanup - ${name} not yet migrated to agenix" >> "$CLEANUP_LOG"
+            ALL_MIGRATED=false
+          fi
+        '') cfg.plainTextPaths)}
+        
+        if [ "$ALL_MIGRATED" = "true" ]; then
+          echo "[$(date)] All secrets migrated, proceeding with cleanup" >> "$CLEANUP_LOG"
+          
+          # Run cleanup script in non-interactive mode
+          export DRY_RUN=false
+          if [ -x "${pkgs.bash}/bin/bash" ] && [ -f "${../scripts/cleanup-plaintext-secrets.sh}" ]; then
+            ${pkgs.bash}/bin/bash ${../scripts/cleanup-plaintext-secrets.sh} >> "$CLEANUP_LOG" 2>&1
+            
+            if [ $? -eq 0 ]; then
+              echo "[$(date)] Automatic cleanup completed successfully" >> "$CLEANUP_LOG"
+              
+              # Create marker file to prevent repeated cleanup attempts
+              touch /var/lib/cistern/.secrets-cleanup-done
+            else
+              echo "[$(date)] ERROR: Automatic cleanup failed" >> "$CLEANUP_LOG"
+            fi
+          else
+            echo "[$(date)] ERROR: Cleanup script not found" >> "$CLEANUP_LOG"
+          fi
+        else
+          echo "[$(date)] Skipping cleanup - not all secrets are migrated yet" >> "$CLEANUP_LOG"
+        fi
+      '';
+    };
+
+    # Enhanced security validation script
+    environment.systemPackages = with pkgs; [
+      (writeScriptBin "cistern-secrets-validate" ''
+        #!${stdenv.shell}
+        set -euo pipefail
+
+        # Colors
+        RED='\033[0;31m'
+        GREEN='\033[0;32m'
+        YELLOW='\033[1;33m'
+        BLUE='\033[0;34m'
+        NC='\033[0m'
+
+        echo -e "${BLUE}=== Cistern Secrets Security Validation ===${NC}"
+        echo
+
+        # Check 1: File permissions
+        echo -e "${BLUE}Checking file permissions...${NC}"
+        PERM_ISSUES=0
+
+        ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: path: ''
+          if [ -f "${path}" ]; then
+            PERMS=$(stat -c %a "${path}" 2>/dev/null || echo "unknown")
+            OWNER=$(stat -c %U:%G "${path}" 2>/dev/null || echo "unknown")
+            
+            if [[ "$PERMS" =~ ^[67][0-9][0-9]$ ]]; then
+              echo -e "  ${RED}✗${NC} ${name}: World-readable! (perms=$PERMS, owner=$OWNER)"
+              PERM_ISSUES=$((PERM_ISSUES + 1))
+            elif [ "$PERMS" != "600" ] && [ "$PERMS" != "400" ]; then
+              echo -e "  ${YELLOW}⚠${NC} ${name}: Weak permissions (perms=$PERMS, owner=$OWNER)"
+              PERM_ISSUES=$((PERM_ISSUES + 1))
+            fi
+          fi
+        '') cfg.plainTextPaths)}
+
+        if [ $PERM_ISSUES -eq 0 ]; then
+          echo -e "  ${GREEN}✓${NC} All secret files have secure permissions"
+        fi
+
+        # Check 2: Environment variables
+        echo
+        echo -e "${BLUE}Checking for secrets in environment...${NC}"
+        ENV_ISSUES=0
+
+        env | grep -iE '(password|secret|key|token|api)' | grep -vE '(PATH|PUBLIC|LESS|HOSTNAME)' | while read -r line; do
+          VAR_NAME=$(echo "$line" | cut -d= -f1)
+          VAR_VALUE=$(echo "$line" | cut -d= -f2)
+          
+          # Check if value looks like a secret (not empty, not a path, contains special chars)
+          if [[ ! "$VAR_VALUE" =~ ^/|^$ ]] && [[ "$VAR_VALUE" =~ [a-zA-Z0-9]{8,} ]]; then
+            echo -e "  ${YELLOW}⚠${NC} Potential secret in environment: $VAR_NAME"
+            ENV_ISSUES=$((ENV_ISSUES + 1))
+          fi
+        done
+
+        if [ $ENV_ISSUES -eq 0 ]; then
+          echo -e "  ${GREEN}✓${NC} No obvious secrets found in environment"
+        fi
+
+        # Check 3: Process command lines
+        echo
+        echo -e "${BLUE}Checking for secrets in process arguments...${NC}"
+        PROC_ISSUES=0
+
+        ps aux | grep -iE '(password|secret|key|token|api)' | grep -v grep | grep -v "cistern-secrets-validate" | while read -r line; do
+          if [[ "$line" =~ password=|secret=|key=|token=|api.*= ]]; then
+            PROC=$(echo "$line" | awk '{print $11}' | cut -d'/' -f4)
+            echo -e "  ${RED}✗${NC} Potential secret in process arguments: $PROC"
+            PROC_ISSUES=$((PROC_ISSUES + 1))
+          fi
+        done
+
+        if [ $PROC_ISSUES -eq 0 ]; then
+          echo -e "  ${GREEN}✓${NC} No secrets found in process arguments"
+        fi
+
+        # Check 4: Migration status
+        echo
+        echo -e "${BLUE}Checking migration status...${NC}"
+        
+        ${pkgs.bash}/bin/bash -c 'cistern-secrets-check' || true
+
+        # Check 5: Age key security
+        echo
+        echo -e "${BLUE}Checking age key security...${NC}"
+        
+        if [ -f "${cfg.ageKeyFile}" ]; then
+          KEY_PERMS=$(stat -c %a "${cfg.ageKeyFile}" 2>/dev/null || echo "unknown")
+          KEY_OWNER=$(stat -c %U:%G "${cfg.ageKeyFile}" 2>/dev/null || echo "unknown")
+          
+          if [ "$KEY_PERMS" = "600" ] || [ "$KEY_PERMS" = "400" ]; then
+            echo -e "  ${GREEN}✓${NC} Age key has secure permissions ($KEY_PERMS)"
+          else
+            echo -e "  ${RED}✗${NC} Age key has insecure permissions: $KEY_PERMS (should be 600)"
+          fi
+          
+          if [[ "$KEY_OWNER" == "root:root" ]]; then
+            echo -e "  ${GREEN}✓${NC} Age key owned by root"
+          else
+            echo -e "  ${YELLOW}⚠${NC} Age key owned by: $KEY_OWNER (should be root:root)"
+          fi
+        else
+          echo -e "  ${RED}✗${NC} Age key not found at ${cfg.ageKeyFile}"
+        fi
+
+        # Summary
+        echo
+        echo -e "${BLUE}=== Summary ===${NC}"
+        
+        TOTAL_ISSUES=$((PERM_ISSUES + ENV_ISSUES + PROC_ISSUES))
+        
+        if [ $TOTAL_ISSUES -eq 0 ]; then
+          echo -e "${GREEN}All security checks passed!${NC}"
+        else
+          echo -e "${YELLOW}Found $TOTAL_ISSUES potential security issues${NC}"
+          echo
+          echo "Recommendations:"
+          
+          if [ $PERM_ISSUES -gt 0 ]; then
+            echo "  - Fix file permissions: sudo chmod 600 /var/lib/*/auth/*.txt"
+          fi
+          
+          if [ $ENV_ISSUES -gt 0 ]; then
+            echo "  - Review environment variables and move secrets to files"
+          fi
+          
+          if [ $PROC_ISSUES -gt 0 ]; then
+            echo "  - Review service configurations to avoid passing secrets as arguments"
+          fi
+        fi
+      '')
+    ];
   };
 }
