@@ -95,13 +95,28 @@ with lib;
         
         # Create default user if no users configured
         if [ ! -s "$HTPASSWD_FILE" ]; then
-          echo "Creating default admin user..."
-          DEFAULT_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -base64 12)
-          echo "$DEFAULT_PASSWORD" > /var/lib/cistern/auth/default-password
-          ${pkgs.apacheHttpd}/bin/htpasswd -bc "$HTPASSWD_FILE" admin "$DEFAULT_PASSWORD"
+          echo "Creating default admin user with secure password..."
+          # Generate cryptographically secure password (16 bytes = 22 base64 chars)
+          DEFAULT_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -base64 16)
+          
+          # Save password securely with restricted permissions
+          PASSWORD_FILE="/var/lib/cistern/auth/admin-password.txt"
+          echo "$DEFAULT_PASSWORD" > "$PASSWORD_FILE"
+          chmod 600 "$PASSWORD_FILE"
+          chown root:root "$PASSWORD_FILE"
+          
+          # Create bcrypt hash with cost factor 10 (htpasswd -B uses bcrypt)
+          ${pkgs.apacheHttpd}/bin/htpasswd -bBC 10 "$HTPASSWD_FILE" admin "$DEFAULT_PASSWORD"
           chown nginx:nginx "$HTPASSWD_FILE"
           chmod 640 "$HTPASSWD_FILE"
-          echo "Default admin password: $DEFAULT_PASSWORD"
+          
+          echo "==============================================="
+          echo "Default admin credentials created:"
+          echo "Username: admin"
+          echo "Password: $DEFAULT_PASSWORD"
+          echo "Password saved to: $PASSWORD_FILE"
+          echo "==============================================="
+          echo "IMPORTANT: Change this password after first login!"
         fi
       '';
     };
@@ -172,7 +187,7 @@ with lib;
                 echo "Usage: $0 add <username> <password>"
                 exit 1
               fi
-              ${pkgs.apacheHttpd}/bin/htpasswd -b /var/lib/cistern/auth/htpasswd "$2" "$3"
+              ${pkgs.apacheHttpd}/bin/htpasswd -bB /var/lib/cistern/auth/htpasswd "$2" "$3"
               systemctl reload nginx
               echo "User $2 added successfully"
               ;;
@@ -193,8 +208,8 @@ with lib;
                 echo "Usage: $0 password <username>"
                 exit 1
               fi
-              NEW_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -base64 12)
-              ${pkgs.apacheHttpd}/bin/htpasswd -b /var/lib/cistern/auth/htpasswd "$2" "$NEW_PASSWORD"
+              NEW_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -base64 16)
+              ${pkgs.apacheHttpd}/bin/htpasswd -bB /var/lib/cistern/auth/htpasswd "$2" "$NEW_PASSWORD"
               systemctl reload nginx
               echo "New password for $2: $NEW_PASSWORD"
               ;;

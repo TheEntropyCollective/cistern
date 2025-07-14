@@ -35,14 +35,18 @@ in
 
     # Root user configuration
     users.users.root = {
-      hashedPassword = mkDefault "";
+      # Disable password login for root - SSH key only
+      # This is more secure than having any password, even a random one
+      hashedPassword = mkDefault "!";  # "!" means account is locked for password auth
       openssh.authorizedKeys.keys = cfg.authorizedKeys;
     };
 
     # Deployment user configuration
     users.users.nixos = {
       isNormalUser = true;
-      hashedPassword = mkDefault "";
+      # Disable password login for nixos user - SSH key only
+      # If password auth is needed, it should be explicitly set in host config
+      hashedPassword = mkDefault "!";  # "!" means account is locked for password auth
       extraGroups = [ "wheel" ];
       openssh.authorizedKeys.keys = cfg.authorizedKeys;
     };

@@ -215,7 +215,15 @@
     enablePasswordAuth = true;
     authorizedKeys = [
       # Add your SSH public keys here for automatic deployment access
-      # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC... your-key@hostname"
+      "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCjZ2yKqEb+s4gz8It2vSNNnnZI
+  JKs0GZsCdCJIUByk4Np5kqI7oi7NIPbzjOa5PLOhucGL/JyIi84Tr/0jr0to/1Ifc
+  /iVXevjdhDsTvxxZkLCNl/GwGWflh59oFAyZ1whceKWYLOiU4su4q+OjdsaZDjHbt
+  ZVAppcoQf+u1hjvN1jmhrxaiGD8koUBjbsk2E4EnV2JjgqGoZYp3ujXf2q0xp/6yU
+  rTyOJZlclee0Zd/Jf/mgiBOgWCXs7hQuAm8cO7fq00rQL+RINebqPIHGJUxXDnqsI
+  6Qd+zn2x4vNy9D2BFZlmcR8S9K+2nHcYGSa4ROxQ4BLLgGZR3/Q019FeLsvXAoR2w
+  woFLLF/TEu1VMJlTN8ASSrMia5BdPdMMOh+uzZ3DyVvmKIN54NDXIdjyVQoF/Fijw
+  tRiTNBIj1MT87c7AmNNIGlBmBfduhbo9bnj/StFcYWODAR9KIkh1jr1RJhZ3fIdqY
+  /7JTV5658uztBiZ+l2Tb4A2qCww9Kb2M= jconnuck@mac-bk"
     ];
   };
 

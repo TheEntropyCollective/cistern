@@ -51,6 +51,16 @@
           specialArgs = { inherit inputs; };
         };
         
+        # Eden - Physical primary server
+        eden = nixpkgs.lib.nixosSystem {
+          system = nixosSystem;
+          modules = commonModules ++ [
+            ./hardware/generic.nix
+            ./hosts/eden.nix
+          ];
+          specialArgs = { inherit inputs; };
+        };
+        
         # VM test configuration
         vm-test = nixpkgs.lib.nixosSystem {
           system = nixosSystem;
@@ -83,14 +93,20 @@
 
       # Deploy-rs configuration for fleet management
       deploy.nodes = {
-        # Example server - add your actual servers here
-        # media-server-01 = {
-        #   hostname = "192.168.1.100";
-        #   profiles.system = {
-        #     user = "root";
-        #     path = deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.media-server-01;
-        #   };
-        # };
+        # Eden - Physical primary server
+        eden = {
+          hostname = "192.168.1.50";
+          profiles.system = {
+            user = "root";
+            path = deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.eden;
+          };
+        };
+        
+        # River-named VMs will be added here by Terraform
+        # Examples:
+        # pishon = { hostname = "192.168.1.101"; ... };
+        # gihon = { hostname = "192.168.1.102"; ... };
+        # tigris = { hostname = "192.168.1.103"; ... };
       };
 
       # Development shell with deployment tools

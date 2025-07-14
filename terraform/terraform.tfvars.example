@@ -1,0 +1,25 @@
+# Terraform configuration example for Cistern fleet
+# Copy this file to terraform.tfvars and customize
+
+# Fleet size
+node_count = 3
+
+# VM resources
+memory = 4096  # MB
+cores  = 4
+storage = 100  # GB
+
+# Network configuration
+network_bridge = "vmbr0"
+base_ip = "192.168.1.100"
+
+# SSH access
+ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC... your-key@hostname"
+
+# Proxmox connection
+proxmox_endpoint = "https://proxmox.local:8006/api2/json"
+proxmox_user = "terraform@pve"
+proxmox_password = "your-password"
+
+# NixOS ISO (upload to Proxmox first)
+nixos_iso_path = "local:iso/nixos-minimal-24.05-x86_64-linux.iso"
