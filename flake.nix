@@ -19,9 +19,14 @@
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    
+    agenix = {
+      url = "github:ryantm/agenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, deploy-rs, nixos-anywhere, disko, ... }@inputs:
+  outputs = { self, nixpkgs, nixpkgs-unstable, deploy-rs, nixos-anywhere, disko, agenix, ... }@inputs:
     let
       supportedSystems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
       forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
@@ -35,7 +40,9 @@
         ./modules/privacy.nix
         ./modules/noisefs.nix
         ./modules/authentik.nix
+        ./modules/secrets.nix
         disko.nixosModules.disko
+        agenix.nixosModules.default
       ];
     in
     {
@@ -123,6 +130,7 @@
             yq-go
             jq
             qemu
+            agenix.packages.${system}.default
           ] ++ nixpkgs.lib.optionals isLinux [
             nixos-anywhere.packages.${system}.default or pkgs.hello
             deploy-rs.packages.${system}.default or pkgs.hello

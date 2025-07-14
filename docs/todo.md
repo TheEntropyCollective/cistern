@@ -1,6 +1,59 @@
 # Cistern Fleet Management Improvements
 
-## Current Milestone: Fleet Management Automation & Scaling Improvements
+## Current Milestone: Secrets Management Security Enhancement
+
+### Analysis Summary
+After analyzing the Cistern codebase security, I've identified critical vulnerabilities:
+
+**Security Issues Found:**
+- API keys stored as plain text files in `/var/lib/media/auto-config/`
+- Admin passwords stored unencrypted in `/var/lib/cistern/auth/admin-password.txt`
+- No encryption for secrets at rest
+- Secrets generated at runtime but stored insecurely
+
+**Implementation Approach:**
+Using agenix for NixOS secrets management to provide:
+- Encryption at rest for all secrets
+- Easy key rotation capabilities
+- Backwards compatibility during migration
+- Simple, declarative secret management
+
+### Sprint 1: Core Secrets Infrastructure ✓
+- [x] Add agenix to flake.nix inputs
+- [x] Create /modules/secrets.nix with core functionality
+- [x] Implement age key generation utilities
+- [x] Add secret encryption/decryption helpers
+- [x] Create migration detection system
+
+### Sprint 2: API Key Management
+- [ ] Update auto-config.nix to use agenix secrets
+- [ ] Implement encrypted API key storage
+- [ ] Add runtime secret injection for services
+- [ ] Create API key rotation utilities
+- [ ] Maintain backwards compatibility mode
+
+### Sprint 3: Authentication Secrets
+- [ ] Update auth.nix to use encrypted passwords
+- [ ] Migrate admin password storage to agenix
+- [ ] Update user management scripts for encrypted storage
+- [ ] Implement secure password generation
+- [ ] Add password rotation capabilities
+
+### Sprint 4: Documentation & Migration Tools
+- [ ] Create comprehensive secrets management guide
+- [ ] Write age key generation documentation
+- [ ] Document secret rotation procedures
+- [ ] Create migration scripts from plain text
+- [ ] Add troubleshooting guide
+
+### Sprint 5: Security Hardening
+- [ ] Remove plain text fallback after migration period
+- [ ] Implement secret access auditing
+- [ ] Add automatic secret backup
+- [ ] Create disaster recovery procedures
+- [ ] Final security audit
+
+## Previous Milestone: Fleet Management Automation & Scaling Improvements
 
 ### Analysis Summary
 After analyzing the current Cistern fleet management system, I've identified the following:
