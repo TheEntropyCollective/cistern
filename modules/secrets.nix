@@ -165,6 +165,103 @@ in
           exit 1
         fi
       '')
+      
+      # Enhanced secrets status command
+      (writeScriptBin "cistern-secrets-status" ''
+        #!${stdenv.shell}
+        set -euo pipefail
+
+        # Colors
+        RED='\033[0;31m'
+        GREEN='\033[0;32m'
+        YELLOW='\033[1;33m'
+        BLUE='\033[0;34m'
+        NC='\033[0m'
+
+        echo "Cistern Secrets Management Status"
+        echo "================================="
+        echo
+
+        # Check age key
+        echo -e "${BLUE}Age Key Status:${NC}"
+        if [ -f "${cfg.ageKeyFile}" ]; then
+          echo -e "  Private key: ${GREEN}✓${NC} Exists"
+          if [ -f "/etc/cistern/age.pub" ]; then
+            echo -e "  Public key:  ${GREEN}✓${NC} $(cat /etc/cistern/age.pub | cut -c1-20)..."
+          else
+            echo -e "  Public key:  ${YELLOW}⚠${NC} Not found (run generate-age-keys.sh)"
+          fi
+        else
+          echo -e "  Private key: ${RED}✗${NC} Missing"
+          echo -e "  Public key:  ${RED}✗${NC} Missing"
+          echo
+          echo "  Run: sudo cistern-secret-gen-keys"
+        fi
+
+        echo
+        echo -e "${BLUE}Secret Status:${NC}"
+        echo "─────────────────────────────────────────────"
+        printf "%-30s %-15s %s\n" "Secret Name" "Status" "Location"
+        echo "─────────────────────────────────────────────"
+
+        ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: path: ''
+          printf "%-30s " "${name}"
+          
+          # Check encrypted version
+          if [ -f "${cfg.secretsPath}/${name}.age" ]; then
+            if [ -f "/run/agenix/${name}" ]; then
+              printf "${GREEN}%-15s${NC} %s\n" "ENCRYPTED" "/run/agenix/${name}"
+            else
+              printf "${YELLOW}%-15s${NC} %s\n" "ENCRYPTED*" "${cfg.secretsPath}/${name}.age"
+            fi
+          elif [ -f "${path}" ]; then
+            printf "${RED}%-15s${NC} %s\n" "PLAIN TEXT" "${path}"
+          else
+            printf "${RED}%-15s${NC} %s\n" "MISSING" "-"
+          fi
+        '') cfg.plainTextPaths)}
+
+        echo
+        echo "─────────────────────────────────────────────"
+        echo "* = Encrypted but not deployed to runtime"
+        echo
+
+        # Migration progress
+        TOTAL=$((${toString (builtins.length (builtins.attrNames cfg.plainTextPaths))}))
+        ENCRYPTED=$(find ${cfg.secretsPath} -name "*.age" 2>/dev/null | wc -l || echo 0)
+        PROGRESS=$((ENCRYPTED * 100 / TOTAL))
+
+        echo -e "${BLUE}Migration Progress:${NC}"
+        echo -n "["
+        
+        # Progress bar
+        BAR_WIDTH=50
+        FILLED=$((PROGRESS * BAR_WIDTH / 100))
+        for i in $(seq 1 $BAR_WIDTH); do
+          if [ $i -le $FILLED ]; then
+            echo -n "="
+          else
+            echo -n "-"
+          fi
+        done
+        
+        echo "] $PROGRESS% ($ENCRYPTED/$TOTAL)"
+        echo
+
+        # Recommendations
+        if [ $PROGRESS -lt 100 ]; then
+          echo -e "${YELLOW}Recommendations:${NC}"
+          echo "  • Run 'sudo cistern-secrets-migrate-all' to encrypt remaining secrets"
+          echo "  • Or use 'sudo ${cfg.secretsPath}/../scripts/migrate-all-secrets.sh'"
+        else
+          echo -e "${GREEN}All secrets are encrypted!${NC}"
+          if [ $ENCRYPTED -gt $(find /run/agenix -type f 2>/dev/null | wc -l || echo 0) ]; then
+            echo
+            echo -e "${YELLOW}Note:${NC} Some encrypted secrets are not deployed yet."
+            echo "      Run deployment to activate them."
+          fi
+        fi
+      '')
     ];
 
     # Auto-generation service for missing secrets

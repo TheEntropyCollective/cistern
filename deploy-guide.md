@@ -112,6 +112,37 @@ Currently configured as secondary nodes. Can be used for:
 
 ## Step 5: Post-Deployment Configuration
 
+### Secure Secrets Management (Recommended)
+
+Cistern now includes encrypted secrets management using agenix. To migrate from plain text secrets:
+
+1. **Check current secret status**:
+   ```bash
+   ssh eden 'sudo cistern-secrets-status'
+   ```
+
+2. **Migrate to encrypted secrets**:
+   ```bash
+   # SSH into the server
+   ssh eden
+   
+   # Run the migration
+   sudo /home/cistern/scripts/migrate-all-secrets.sh
+   
+   # Validate the migration
+   sudo /home/cistern/scripts/validate-secrets.sh
+   ```
+
+3. **Commit encrypted secrets** (safe to store in git):
+   ```bash
+   git add secrets/*.age
+   git commit -m "Add encrypted secrets"
+   ```
+
+For detailed instructions, see [Secrets Migration Guide](docs/secrets-migration-guide.md).
+
+### Configure Services
+
 1. **Configure Usenet** (if using):
    - Access SABnzbd: http://eden:8080
    - Add Usenet provider in Settings → Servers
