@@ -75,6 +75,10 @@ in
         "sabnzbd-api-key" = "/var/lib/media/auto-config/sabnzbd-api-key.txt";
         "transmission-rpc-password" = "/var/lib/media/auto-config/transmission-rpc-password.txt";
         "admin-password" = "/var/lib/cistern/auth/admin-password.txt";
+        "authentik-db-password" = "/var/lib/cistern/authentik/db-password";
+        "authentik-admin-password" = "/var/lib/cistern/authentik/admin-password";
+        "authentik-smtp-password" = "/var/lib/cistern/authentik/smtp-password";
+        "authentik-secret-key" = "/var/lib/cistern/authentik/secret-key";
       };
       description = "Paths to plain text secrets for migration";
     };

@@ -32,12 +32,12 @@ Using agenix for NixOS secrets management to provide:
 - [x] Create API key rotation utilities
 - [x] Maintain backwards compatibility mode
 
-### Sprint 3: Authentication Secrets
-- [ ] Update auth.nix to use encrypted passwords
-- [ ] Migrate admin password storage to agenix
-- [ ] Update user management scripts for encrypted storage
-- [ ] Implement secure password generation
-- [ ] Add password rotation capabilities
+### Sprint 3: Authentication Secrets ✓
+- [x] Update auth.nix to use encrypted passwords
+- [x] Migrate admin password storage to agenix
+- [x] Update user management scripts for encrypted storage
+- [x] Implement secure password generation
+- [x] Add password rotation capabilities
 
 ### Sprint 4: Documentation & Migration Tools
 - [ ] Create comprehensive secrets management guide

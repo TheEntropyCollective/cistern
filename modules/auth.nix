@@ -96,14 +96,26 @@ with lib;
         # Create default user if no users configured
         if [ ! -s "$HTPASSWD_FILE" ]; then
           echo "Creating default admin user with secure password..."
-          # Generate cryptographically secure password (16 bytes = 22 base64 chars)
-          DEFAULT_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -base64 16)
           
-          # Save password securely with restricted permissions
-          PASSWORD_FILE="/var/lib/cistern/auth/admin-password.txt"
-          echo "$DEFAULT_PASSWORD" > "$PASSWORD_FILE"
-          chmod 600 "$PASSWORD_FILE"
-          chown root:root "$PASSWORD_FILE"
+          # Check for agenix secret first
+          if [ -f "/run/agenix/admin-password" ]; then
+            DEFAULT_PASSWORD=$(cat "/run/agenix/admin-password")
+            echo "Using agenix-encrypted admin password"
+          # Check for existing plain text password (migration mode)
+          elif [ -f "/var/lib/cistern/auth/admin-password.txt" ]; then
+            DEFAULT_PASSWORD=$(cat "/var/lib/cistern/auth/admin-password.txt")
+            echo "Using existing plain text admin password (migration pending)"
+          else
+            # Generate new password
+            DEFAULT_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -base64 16)
+            
+            # Save password in plain text (for migration compatibility)
+            PASSWORD_FILE="/var/lib/cistern/auth/admin-password.txt"
+            echo "$DEFAULT_PASSWORD" > "$PASSWORD_FILE"
+            chmod 600 "$PASSWORD_FILE"
+            chown root:root "$PASSWORD_FILE"
+            echo "Generated new admin password (plain text - needs migration to agenix)"
+          fi
           
           # Create bcrypt hash with cost factor 10 (htpasswd -B uses bcrypt)
           ${pkgs.apacheHttpd}/bin/htpasswd -bBC 10 "$HTPASSWD_FILE" admin "$DEFAULT_PASSWORD"
@@ -113,8 +125,14 @@ with lib;
           echo "==============================================="
           echo "Default admin credentials created:"
           echo "Username: admin"
-          echo "Password: $DEFAULT_PASSWORD"
-          echo "Password saved to: $PASSWORD_FILE"
+          if [ -f "/run/agenix/admin-password" ]; then
+            echo "Password: Stored securely in agenix"
+            echo "To view: sudo cat /run/agenix/admin-password"
+          else
+            echo "Password: $DEFAULT_PASSWORD"
+            echo "Password saved to: /var/lib/cistern/auth/admin-password.txt"
+            echo "IMPORTANT: Migrate to agenix for security!"
+          fi
           echo "==============================================="
           echo "IMPORTANT: Change this password after first login!"
         fi
@@ -208,10 +226,26 @@ with lib;
                 echo "Usage: $0 password <username>"
                 exit 1
               fi
-              NEW_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -base64 16)
-              ${pkgs.apacheHttpd}/bin/htpasswd -bB /var/lib/cistern/auth/htpasswd "$2" "$NEW_PASSWORD"
-              systemctl reload nginx
-              echo "New password for $2: $NEW_PASSWORD"
+              
+              # For admin user, check if we're using agenix
+              if [ "$2" = "admin" ] && [ -f "/run/agenix/admin-password" ]; then
+                echo "Admin password is managed by agenix"
+                echo "To update, encrypt a new password with age and update the secret"
+                echo "Current password can be viewed with: sudo cat /run/agenix/admin-password"
+              else
+                NEW_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -base64 16)
+                ${pkgs.apacheHttpd}/bin/htpasswd -bB /var/lib/cistern/auth/htpasswd "$2" "$NEW_PASSWORD"
+                systemctl reload nginx
+                echo "New password for $2: $NEW_PASSWORD"
+                
+                # Save admin password to plain text file if it's the admin user (for migration)
+                if [ "$2" = "admin" ]; then
+                  echo "$NEW_PASSWORD" > /var/lib/cistern/auth/admin-password.txt
+                  chmod 600 /var/lib/cistern/auth/admin-password.txt
+                  chown root:root /var/lib/cistern/auth/admin-password.txt
+                  echo "Note: Consider migrating to agenix for secure password storage"
+                fi
+              fi
               ;;
             *)
               echo "Cistern User Manager"

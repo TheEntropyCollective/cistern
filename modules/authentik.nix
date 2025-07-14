@@ -203,26 +203,35 @@ with lib;
       };
       
       script = ''
-        # Generate database password if not exists
-        if [ ! -f "${config.cistern.authentik.database.passwordFile}" ]; then
+        # Generate or use database password
+        if [ -f "/run/agenix/authentik-db-password" ]; then
+          echo "Using agenix-encrypted database password"
+        elif [ ! -f "${config.cistern.authentik.database.passwordFile}" ]; then
           echo "Generating database password..."
           ${pkgs.openssl}/bin/openssl rand -base64 32 > "${config.cistern.authentik.database.passwordFile}"
           chmod 600 "${config.cistern.authentik.database.passwordFile}"
+          echo "Generated plain text database password (needs migration to agenix)"
         fi
         
-        # Generate admin password if not exists
-        if [ ! -f "${config.cistern.authentik.admin.passwordFile}" ]; then
+        # Generate or use admin password
+        if [ -f "/run/agenix/authentik-admin-password" ]; then
+          echo "Using agenix-encrypted admin password"
+        elif [ ! -f "${config.cistern.authentik.admin.passwordFile}" ]; then
           echo "Generating admin password..."
           ${pkgs.openssl}/bin/openssl rand -base64 16 > "${config.cistern.authentik.admin.passwordFile}"
           chmod 600 "${config.cistern.authentik.admin.passwordFile}"
           echo "Authentik admin password saved to: ${config.cistern.authentik.admin.passwordFile}"
+          echo "Consider migrating to agenix for security"
         fi
         
-        # Generate secret key if not provided
-        if [ ! -f "/var/lib/cistern/authentik/secret-key" ]; then
+        # Generate or use secret key
+        if [ -f "/run/agenix/authentik-secret-key" ]; then
+          echo "Using agenix-encrypted secret key"
+        elif [ ! -f "/var/lib/cistern/authentik/secret-key" ]; then
           echo "Generating Authentik secret key..."
           ${pkgs.openssl}/bin/openssl rand -base64 50 > "/var/lib/cistern/authentik/secret-key"
           chmod 600 "/var/lib/cistern/authentik/secret-key"
+          echo "Generated plain text secret key (needs migration to agenix)"
         fi
         
         # Generate outpost token if not exists
@@ -280,12 +289,23 @@ with lib;
       };
       
       script = ''
-        # Load secrets
-        export AUTHENTIK_SECRET_KEY=$(cat /var/lib/cistern/authentik/secret-key)
-        export AUTHENTIK_POSTGRESQL__PASSWORD=$(cat ${config.cistern.authentik.database.passwordFile})
+        # Load secrets - check agenix first, then fall back to plain text
+        if [ -f "/run/agenix/authentik-secret-key" ]; then
+          export AUTHENTIK_SECRET_KEY=$(cat /run/agenix/authentik-secret-key)
+        else
+          export AUTHENTIK_SECRET_KEY=$(cat /var/lib/cistern/authentik/secret-key)
+        fi
+        
+        if [ -f "/run/agenix/authentik-db-password" ]; then
+          export AUTHENTIK_POSTGRESQL__PASSWORD=$(cat /run/agenix/authentik-db-password)
+        else
+          export AUTHENTIK_POSTGRESQL__PASSWORD=$(cat ${config.cistern.authentik.database.passwordFile})
+        fi
         
         ${optionalString config.cistern.authentik.smtp.enable ''
-          if [ -f "${config.cistern.authentik.smtp.passwordFile}" ]; then
+          if [ -f "/run/agenix/authentik-smtp-password" ]; then
+            export AUTHENTIK_EMAIL__PASSWORD=$(cat /run/agenix/authentik-smtp-password)
+          elif [ -f "${config.cistern.authentik.smtp.passwordFile}" ]; then
             export AUTHENTIK_EMAIL__PASSWORD=$(cat ${config.cistern.authentik.smtp.passwordFile})
           fi
         ''}
@@ -346,12 +366,23 @@ with lib;
       };
       
       script = ''
-        # Load secrets
-        export AUTHENTIK_SECRET_KEY=$(cat /var/lib/cistern/authentik/secret-key)
-        export AUTHENTIK_POSTGRESQL__PASSWORD=$(cat ${config.cistern.authentik.database.passwordFile})
+        # Load secrets - check agenix first, then fall back to plain text
+        if [ -f "/run/agenix/authentik-secret-key" ]; then
+          export AUTHENTIK_SECRET_KEY=$(cat /run/agenix/authentik-secret-key)
+        else
+          export AUTHENTIK_SECRET_KEY=$(cat /var/lib/cistern/authentik/secret-key)
+        fi
+        
+        if [ -f "/run/agenix/authentik-db-password" ]; then
+          export AUTHENTIK_POSTGRESQL__PASSWORD=$(cat /run/agenix/authentik-db-password)
+        else
+          export AUTHENTIK_POSTGRESQL__PASSWORD=$(cat ${config.cistern.authentik.database.passwordFile})
+        fi
         
         ${optionalString config.cistern.authentik.smtp.enable ''
-          if [ -f "${config.cistern.authentik.smtp.passwordFile}" ]; then
+          if [ -f "/run/agenix/authentik-smtp-password" ]; then
+            export AUTHENTIK_EMAIL__PASSWORD=$(cat /run/agenix/authentik-smtp-password)
+          elif [ -f "${config.cistern.authentik.smtp.passwordFile}" ]; then
             export AUTHENTIK_EMAIL__PASSWORD=$(cat ${config.cistern.authentik.smtp.passwordFile})
           fi
         ''}
@@ -385,9 +416,18 @@ with lib;
       };
       
       script = ''
-        # Load secrets
-        export AUTHENTIK_SECRET_KEY=$(cat /var/lib/cistern/authentik/secret-key)
-        export AUTHENTIK_POSTGRESQL__PASSWORD=$(cat ${config.cistern.authentik.database.passwordFile})
+        # Load secrets - check agenix first, then fall back to plain text
+        if [ -f "/run/agenix/authentik-secret-key" ]; then
+          export AUTHENTIK_SECRET_KEY=$(cat /run/agenix/authentik-secret-key)
+        else
+          export AUTHENTIK_SECRET_KEY=$(cat /var/lib/cistern/authentik/secret-key)
+        fi
+        
+        if [ -f "/run/agenix/authentik-db-password" ]; then
+          export AUTHENTIK_POSTGRESQL__PASSWORD=$(cat /run/agenix/authentik-db-password)
+        else
+          export AUTHENTIK_POSTGRESQL__PASSWORD=$(cat ${config.cistern.authentik.database.passwordFile})
+        fi
         
         # Wait for server to be ready
         for i in {1..30}; do
@@ -401,7 +441,14 @@ with lib;
         # Create admin user if not exists
         if ! ${pkgs.authentik}/bin/ak shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); exit(1 if User.objects.filter(username='${config.cistern.authentik.admin.username}').exists() else 0)"; then
           echo "Creating admin user..."
-          ADMIN_PASSWORD=$(cat ${config.cistern.authentik.admin.passwordFile})
+          
+          # Load admin password - check agenix first
+          if [ -f "/run/agenix/authentik-admin-password" ]; then
+            ADMIN_PASSWORD=$(cat /run/agenix/authentik-admin-password)
+          else
+            ADMIN_PASSWORD=$(cat ${config.cistern.authentik.admin.passwordFile})
+          fi
+          
           ${pkgs.authentik}/bin/ak shell -c "
             from django.contrib.auth import get_user_model
             User = get_user_model()
@@ -473,8 +520,19 @@ with lib;
       (writeShellScriptBin "cistern-authentik" ''
         #!/usr/bin/env bash
         
-        export AUTHENTIK_SECRET_KEY=$(cat /var/lib/cistern/authentik/secret-key)
-        export AUTHENTIK_POSTGRESQL__PASSWORD=$(cat ${config.cistern.authentik.database.passwordFile})
+        # Load secrets - check agenix first, then fall back to plain text
+        if [ -f "/run/agenix/authentik-secret-key" ]; then
+          export AUTHENTIK_SECRET_KEY=$(cat /run/agenix/authentik-secret-key)
+        else
+          export AUTHENTIK_SECRET_KEY=$(cat /var/lib/cistern/authentik/secret-key)
+        fi
+        
+        if [ -f "/run/agenix/authentik-db-password" ]; then
+          export AUTHENTIK_POSTGRESQL__PASSWORD=$(cat /run/agenix/authentik-db-password)
+        else
+          export AUTHENTIK_POSTGRESQL__PASSWORD=$(cat ${config.cistern.authentik.database.passwordFile})
+        fi
+        
         export AUTHENTIK_POSTGRESQL__HOST=${config.cistern.authentik.database.host}
         export AUTHENTIK_POSTGRESQL__PORT=${toString config.cistern.authentik.database.port}
         export AUTHENTIK_POSTGRESQL__NAME=${config.cistern.authentik.database.name}
@@ -490,7 +548,13 @@ with lib;
             ${authentik}/bin/ak migrate
             ;;
           admin-password)
-            echo "Admin password: $(cat ${config.cistern.authentik.admin.passwordFile})"
+            if [ -f "/run/agenix/authentik-admin-password" ]; then
+              echo "Admin password: $(cat /run/agenix/authentik-admin-password)"
+              echo "Password is securely stored in agenix"
+            else
+              echo "Admin password: $(cat ${config.cistern.authentik.admin.passwordFile})"
+              echo "Warning: Password stored in plain text - consider migrating to agenix"
+            fi
             echo "Admin username: ${config.cistern.authentik.admin.username}"
             echo "Admin email: ${config.cistern.authentik.admin.email}"
             ;;

@@ -33,7 +33,9 @@ in
   # Authentication secrets
   "admin-password.age" = mkSecret (builtins.attrValues hosts) admins;
   "authentik-secret-key.age" = mkSecret (builtins.attrValues hosts) admins;
-  "authentik-postgres-password.age" = mkSecret (builtins.attrValues hosts) admins;
+  "authentik-db-password.age" = mkSecret (builtins.attrValues hosts) admins;
+  "authentik-admin-password.age" = mkSecret (builtins.attrValues hosts) admins;
+  "authentik-smtp-password.age" = mkSecret (builtins.attrValues hosts) admins;
 
   # Future secrets can be added here
 }
