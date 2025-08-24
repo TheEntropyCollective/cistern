@@ -12,6 +12,21 @@
 
   networking.hostName = "pishon";
 
+  # Nixarr media server configuration
+  nixarr = {
+    enable = false; # Will be enabled in later tasks
+    # Standard directories as per Nixarr defaults
+    mediaDir = "/data/media";
+    stateDir = "/data/media/.state/nixarr";
+    
+    # Services will be enabled in subsequent tasks:
+    # jellyfin.enable = true;
+    # sonarr.enable = true;
+    # radarr.enable = true;
+    # prowlarr.enable = true;
+    # transmission.enable = true;
+  };
+
   # Basic system packages
   environment.systemPackages = with pkgs; [
     vim
