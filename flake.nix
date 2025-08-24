@@ -13,6 +13,7 @@
       system = "x86_64-linux";
       modules = [ 
         ./configuration.nix
+        ./modules/base.nix
         nixarr.nixosModules.default
       ];
     };
