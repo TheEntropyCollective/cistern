@@ -20,13 +20,13 @@
 
   # Nixarr media server configuration
   nixarr = {
-    enable = false; # Will be enabled in later tasks
+    enable = true;
     # Standard directories as per Nixarr defaults
     mediaDir = "/data/media";
     stateDir = "/data/media/.state/nixarr";
     
-    # Services will be enabled in subsequent tasks:
-    # jellyfin.enable = true;
+    # Enable Jellyfin media server
+    jellyfin.enable = true;
     # sonarr.enable = true;
     # radarr.enable = true;
     # prowlarr.enable = true;

@@ -58,7 +58,10 @@ with lib;
       networkmanager.enable = true;
       firewall = {
         enable = true;
-        allowedTCPPorts = [ 22 ]; # SSH access
+        allowedTCPPorts = [ 
+          22   # SSH access
+          8096 # Jellyfin web interface
+        ];
       };
     };
 
