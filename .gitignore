@@ -1,0 +1,14 @@
+# Development and documentation files
+CLAUDE.md
+backlog/
+.claude/
+
+# Nix build results
+result
+result-*
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~
